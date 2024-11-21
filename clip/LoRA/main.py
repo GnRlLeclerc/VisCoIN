@@ -54,7 +54,9 @@ def set_random_seed(seed: int) -> None:
 @click.option("--r", default=2, type=int, help="Rank of the low-rank matrices.")
 @click.option("--alpha", default=1, type=int, help="Scaling factor (see LoRA paper).")
 @click.option("--dropout_rate", default=0.25, type=float, help="Dropout rate before LoRA module.")
-@click.option("--save_path", default="./", type=str, help="Path to save trained LoRA modules.")
+@click.option(
+    "--save_path", default="./weights/", type=str, help="Path to save trained LoRA modules."
+)
 @click.option(
     "--filename",
     default="lora_weights",
@@ -95,7 +97,7 @@ def main(
     # Load CLIP model
     clip_model, preprocess = clip.load(backbone)
     clip_model.eval()
-    logit_scale = 10
+    logit_scale = 100
 
     # Prepare dataset
     click.echo("Preparing dataset.")

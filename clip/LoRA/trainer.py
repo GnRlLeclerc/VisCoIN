@@ -119,63 +119,76 @@ def run_lora(
 
     clip_model = clip_model.to(args.device)
 
-    for iters in range(total_iters):
-        clip_model.train()
-        acc_train = 0.0
-        tot_samples = 0
-        loss_epoch = 0.0
+    try:
 
-        for images, target, caption in tqdm.tqdm(train_loader):
-            images, target = images.to(args.device), target.to(args.device)
+        for iters in range(total_iters):
+            clip_model.train()
+            acc_train = 0.0
+            tot_samples = 0
+            loss_epoch = 0.0
 
-            # Compute texts embeddings
-            with torch.amp.autocast(device_type=args.device, dtype=torch.float16):
-                texts = clip.tokenize(caption).to(args.device)
-                texts_embeddings = clip_model.encode_text(texts)
-            text_features = texts_embeddings / texts_embeddings.norm(dim=-1, keepdim=True)
+            for images, target, caption in tqdm.tqdm(train_loader):
+                images, target = images.to(args.device), target.to(args.device)
 
-            # Compute image embeddings
-            with torch.amp.autocast(device_type=args.device, dtype=torch.float16):
-                image_features = clip_model.encode_image(images)
-            image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+                # Compute texts embeddings
+                with torch.amp.autocast(device_type=args.device, dtype=torch.float16):
+                    texts = clip.tokenize(caption).to(args.device)
+                    texts_embeddings = clip_model.encode_text(texts)
+                text_features = texts_embeddings / texts_embeddings.norm(dim=-1, keepdim=True)
 
-            # Compute logits
-            logits_per_image = args.logit_scale * image_features @ text_features.t()
-            logits_per_text = args.logit_scale * text_features @ image_features.t()
+                # Compute image embeddings
+                with torch.amp.autocast(device_type=args.device, dtype=torch.float16):
+                    image_features = clip_model.encode_image(images)
+                image_features = image_features / image_features.norm(dim=-1, keepdim=True)
 
-            # Compute loss per image and per text and average them
+                # Compute logits
+                logits_per_image = args.logit_scale * image_features @ text_features.t()
+                logits_per_text = args.logit_scale * text_features @ image_features.t()
 
-            # The labels ensure that the image should be paired with the corresponding text (image 0 with text 0, etc.)
-            # The similarity matrix should be all zeros except for the diagonal
-            labels = torch.arange(len(logits_per_image)).to(logits_per_image.device)
-            image_loss = F.cross_entropy(logits_per_image, labels)
-            text_loss = F.cross_entropy(logits_per_text, labels)
+                # Compute loss per image and per text and average them
 
-            loss = (image_loss + text_loss) / 2
+                # The labels ensure that the image should be paired with the corresponding text (image 0 with text 0, etc.)
+                # The similarity matrix should be all zeros except for the diagonal
+                labels = torch.arange(len(logits_per_image)).to(logits_per_image.device)
 
-            # Compute classifier accuracy on each batch
-            test_prediction = (
-                args.logit_scale
-                * image_features
-                @ class_features(clip_model, list(dataset.class_labels.values()), args.device).t()
-            )
+                image_loss = F.cross_entropy(logits_per_image, labels)
+                text_loss = F.cross_entropy(logits_per_text, labels)
 
-            acc_train += cls_acc(test_prediction, target) * target.shape[0]
+                loss = (image_loss + text_loss) / 2
 
-            loss_epoch += loss.item() * target.shape[0]
-            tot_samples += target.shape[0]
+                # Compute classifier accuracy on each batch
+                test_prediction = (
+                    args.logit_scale
+                    * image_features
+                    @ class_features(
+                        clip_model, list(dataset.class_labels.values()), args.device
+                    ).t()
+                )
 
-            # Step and update
-            optimizer.zero_grad()
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-            scheduler.step()
+                acc_train += cls_acc(test_prediction, target) * target.shape[0]
 
-        acc_train /= tot_samples
-        loss_epoch /= tot_samples
-        current_lr = scheduler.get_last_lr()[0]
-        print("LR: {:.6f}, Acc: {:.4f}, Loss: {:.4f}".format(current_lr, acc_train, loss_epoch))
+                loss_epoch += loss.item() * target.shape[0]
+                tot_samples += target.shape[0]
+
+                # Step and update
+                optimizer.zero_grad()
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+                scheduler.step()
+
+            acc_train /= tot_samples
+            loss_epoch /= tot_samples
+            current_lr = scheduler.get_last_lr()[0]
+            print("LR: {:.6f}, Acc: {:.4f}, Loss: {:.4f}".format(current_lr, acc_train, loss_epoch))
+
+    # Save the model if interrupted by ctrl+c
+    except KeyboardInterrupt:
+        if args.save_path:
+            print("\n**** Training interrupted. Saving model. ****\n")
+            save_lora(args, list_lora_layers)
+    except Exception as e:
+        raise e
 
     acc_test = evaluate_lora(args, clip_model, test_loader, dataset)
     print("**** Final test accuracy: {:.2f}. ****\n".format(acc_test))
