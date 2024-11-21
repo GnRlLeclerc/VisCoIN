@@ -1,6 +1,5 @@
 # Ignore datasets
 /datasets
-/experiments
 
 # Python
 __pycache__/
