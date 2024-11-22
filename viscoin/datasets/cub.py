@@ -202,6 +202,11 @@ class Labeled_CUB_200_2011(CUB_200_2011):
             f"{self.dataset_path}image_class_labels.txt", dtype=int, delimiter=" "
         )  # Class label id for each image
 
+    def get_attribute_caption(self, attribute: str) -> str:
+        """Get a caption for an attribute :  has_wing_color::blue  --> blue wing color"""
+        attribute = attribute.split("::")
+        return f"{attribute[1].replace('_', ' ')}{attribute[0].lstrip('has').replace('_', ' ')}"
+
     def get_caption(self, index: int) -> str:
         """Get a caption for an image by index from its class and attributes."""
 
@@ -210,18 +215,15 @@ class Labeled_CUB_200_2011(CUB_200_2011):
 
         # Get the attributes for the image
         attributes = self.attributes[index]
-        attribute_labels = [self.attributes_labels[attr].split("::") for attr in attributes]
-
-        get_attribute_caption = (
-            lambda attr: f"with {attr[1].replace("_", " ")}{attr[0].lstrip("has").replace("_", " ")}"
-        )
+        attribute_labels = [self.attributes_labels[attr] for attr in attributes]
 
         # Get random attribute indices
         random_attributes_indices = np.random.choice(
             len(attribute_labels), self.attributes_per_label, replace=False
         )
         random_attribute_captions = [
-            get_attribute_caption(attribute_labels[i]) for i in random_attributes_indices
+            "with " + self.get_attribute_caption(attribute_labels[i])
+            for i in random_attributes_indices
         ]
 
         # Get the caption
