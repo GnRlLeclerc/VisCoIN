@@ -131,15 +131,17 @@ def run_lora(
                 images, target = images.to(args.device), target.to(args.device)
 
                 # Compute texts embeddings
-                with torch.amp.autocast(device_type=args.device, dtype=torch.float16):
-                    texts = clip.tokenize(caption).to(args.device)
-                    texts_embeddings = clip_model.encode_text(texts)
-                text_features = texts_embeddings / texts_embeddings.norm(dim=-1, keepdim=True)
+
+                with torch.no_grad():
+                    with torch.amp.autocast(device_type=args.device, dtype=torch.float16):
+                        texts = clip.tokenize(caption).to(args.device)
+                        texts_embeddings = clip_model.encode_text(texts)
+                    text_features = texts_embeddings / texts_embeddings.norm(dim=-1, keepdim=True)
 
                 # Compute image embeddings
                 with torch.amp.autocast(device_type=args.device, dtype=torch.float16):
-                    image_features = clip_model.encode_image(images)
-                image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+                    image_embeddings = clip_model.encode_image(images)
+                image_features = image_embeddings / image_embeddings.norm(dim=-1, keepdim=True)
 
                 # Compute logits
                 logits_per_image = args.logit_scale * image_features @ text_features.t()
@@ -165,7 +167,7 @@ def run_lora(
                     ).t()
                 )
 
-                acc_train += cls_acc(test_prediction, target) * target.shape[0]
+                acc_train += cls_acc(test_prediction, target, topk=1) * target.shape[0]
 
                 loss_epoch += loss.item() * target.shape[0]
                 tot_samples += target.shape[0]

@@ -103,8 +103,8 @@ def main(
     click.echo("Preparing dataset.")
     dataset_path = os.path.join(os.path.dirname(__file__), "./../../datasets/CUB_200_2011/")
 
-    train_dataset = Labeled_CUB_200_2011(dataset_path, mode="train")
-    test_dataset = Labeled_CUB_200_2011(dataset_path, mode="test")
+    train_dataset = Labeled_CUB_200_2011(dataset_path, mode="train", attributes_per_label=1)
+    test_dataset = Labeled_CUB_200_2011(dataset_path, mode="test", attributes_per_label=1)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 

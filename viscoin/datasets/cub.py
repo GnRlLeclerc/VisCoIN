@@ -227,7 +227,8 @@ class Labeled_CUB_200_2011(CUB_200_2011):
         ]
 
         # Get the caption
-        caption = f"A picture of a {class_name} {', '.join(random_attribute_captions)}."
+        # caption = f"A picture of a {class_name} {', '.join(random_attribute_captions)}."
+        caption = f"A photo of a {class_name}."
 
         return caption
 
