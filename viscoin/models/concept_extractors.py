@@ -70,20 +70,18 @@ class ConceptExtractor(nn.Module):
 
         # Define additional layers for feature fusion and output
         # still (batch_size, latent_channels, 7, 7)
-        self.conv4 = nn.Conv2d(
-            3 * latent_channels, 3 * latent_channels, kernel_size=3, padding=1, stride=1
-        )
+        self.conv4 = nn.Conv2d(latent_channels, latent_channels, kernel_size=3, padding=1, stride=1)
 
         # Shared pooling layer for both outputs
         # Maps to an output of shape 3x3, ie (batch_size, n_concepts, 3, 3)
         self.pool = nn.AdaptiveAvgPool2d(3)
 
         # ------------- Compute the first output x1 ------------ #
-        self.conv5 = nn.Conv2d(3 * latent_channels, n_concepts, kernel_size=1, padding=0, stride=1)
+        self.conv5 = nn.Conv2d(latent_channels, n_concepts, kernel_size=1, padding=0, stride=1)
 
         # ------------ Compute the second output x2 ------------ #
         # (batch_size, 9 * n_concepts)
-        self.linear1 = nn.Linear(latent_channels * 3 * 9, 9 * n_concepts, bias=True)
+        self.linear1 = nn.Linear(latent_channels * 9, 9 * n_concepts, bias=True)
         # (batch_size, 9 * n_concepts)
         self.linear2 = nn.Linear(9 * n_concepts, 9 * n_concepts, bias=False)
 
@@ -111,7 +109,7 @@ class ConceptExtractor(nn.Module):
 
         # Concatenate feature maps along the channel dimension
         # (batch_size, 3 * latent_channels, 7, 7)
-        x = torch.cat((x1, x2, x3), 1)
+        x = x1 + x2 + x3
 
         # Mix the concatenated feature map further
         # (batch_size, 3 * latent_channels, 7, 7)
@@ -128,7 +126,7 @@ class ConceptExtractor(nn.Module):
         # (batch_size, 3 * latent_channels, 3, 3)
         x2 = self.pool(x)
         # (batch_size, 3 * latent_channels * 9)
-        x2 = x2.view(-1, self.latent_channels * 3 * 9)
+        x2 = x2.view(-1, self.latent_channels * 9)
         # (batch_size, 9 * n_concepts)
         x2 = self.activ(self.linear1(x2))
         # (batch_size, 9 * n_concepts)

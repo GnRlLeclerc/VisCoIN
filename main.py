@@ -403,6 +403,11 @@ def concept_heatmaps(dataset_path: str, viscoin_pickle_path: str, device: str):
     loss = F.cross_entropy(explainer_classes, labels)
     loss.backward()
 
+    # Sort activated concepts per image in the batch
+    concept_pools = F.adaptive_max_pool2d(concept_maps, (1, 1)).flatten(start_dim=1)
+    concept_probas = F.softmax(concept_pools, dim=1)
+    top_concepts = concept_probas.argsort(descending=True).cpu().numpy()
+
     # Compute heatmaps
     heatmaps = [
         gradcam1.compute(),
@@ -441,7 +446,7 @@ def concept_heatmaps(dataset_path: str, viscoin_pickle_path: str, device: str):
                 axs[row, column].imshow(
                     overlay(
                         (from_torch(images[row]) * 255).astype(np.uint8),
-                        heatmap_to_img(heatmaps[column - 1][row]),
+                        heatmap_to_img(heatmaps[column - 1][row][top_concepts[row, 0]]),
                     )
                 )
 

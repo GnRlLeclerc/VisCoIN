@@ -30,14 +30,14 @@ class GradCAM:
 
         # Sum the weighted activations for each channel into maps
         # (batch_size, height, width)
-        heatmaps = (self.activation * weights[:, :, None, None]).sum(axis=1)
+        heatmaps = self.activation * weights[:, :, None, None]  # .sum(axis=1)
 
         # Remove negative values (relu)
         heatmaps[heatmaps < 0] = 0
 
         # Normalize to [0, 1]
-        batchwise_max = heatmaps.max(axis=(1, 2))[:, None, None]
-        batchwise_min = heatmaps.min(axis=(1, 2))[:, None, None]
+        batchwise_max = heatmaps.max(axis=(1, 2, 3))[:, None, None, None]
+        batchwise_min = heatmaps.min(axis=(1, 2, 3))[:, None, None, None]
 
         divider = batchwise_max - batchwise_min
         divider[divider == 0] = 1  # Avoid division by zero
