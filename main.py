@@ -20,15 +20,18 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 from torch.utils.data import DataLoader
+import clip
 
 from viscoin.datasets.cub import CUB_200_2011
 from viscoin.models.classifiers import Classifier
 from viscoin.models.concept_extractors import ConceptExtractor
 from viscoin.models.explainers import Explainer
 from viscoin.models.gan import GeneratorAdapted
+from viscoin.models.clip_adapter import ClipAdapter
 from viscoin.models.utils import load_viscoin, load_viscoin_pickle, save_viscoin_pickle
 from viscoin.testing.classifiers import test_classifier
 from viscoin.testing.concepts import test_concepts
+from viscoin.testing.clip_adapter import get_concept_labels_vocab
 from viscoin.testing.viscoin import (
     ThresholdSelection,
     TopKSelection,
@@ -37,7 +40,15 @@ from viscoin.testing.viscoin import (
 )
 from viscoin.training.classifiers import train_classifier_cub
 from viscoin.training.viscoin import TrainingParameters, train_viscoin_cub
-from viscoin.utils.cli import batch_size, dataset_path, device, viscoin_pickle_path
+from viscoin.training.clip_adapter import train_clip_adapter_cub
+from viscoin.utils.cli import (
+    batch_size,
+    dataset_path,
+    device,
+    viscoin_pickle_path,
+    clip_adapter_path,
+    vocab_path,
+)
 from viscoin.utils.gradcam import GradCAM
 from viscoin.utils.images import from_torch, heatmap_to_img, overlay
 from viscoin.utils.logging import configure_score_logging
@@ -156,6 +167,40 @@ def train(
                 params,
                 device,
             )
+
+        case "clip_adapter":
+
+            viscoin = load_viscoin_pickle("checkpoints/cub/viscoin-cub.pkl")
+
+            clip_model, preprocess = clip.load("ViT-B/32", device=device)
+
+            clip_adapter = ClipAdapter(
+                viscoin.concept_extractor.n_concepts * 9, clip_model.visual.output_dim
+            ).to(device)
+
+            configure_score_logging(f"{model_name}_{epochs}.log")
+
+            # Creating new dataloader with the clip preprocess as clip does not work with all image sizes
+            train_dataset = CUB_200_2011(dataset_path, mode="train", transform=preprocess)
+            test_dataset = CUB_200_2011(dataset_path, mode="test", transform=preprocess)
+
+            train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+            test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+            # The training saves the viscoin model regularly
+            train_clip_adapter_cub(
+                clip_adapter,
+                viscoin.concept_extractor.to(device),
+                viscoin.classifier.to(device),
+                clip_model,
+                train_loader,
+                test_loader,
+                device,
+                epochs,
+                learning_rate,
+            )
+
+            torch.save(clip_adapter, output_weights)
 
         case _:
             raise ValueError(f"Unknown model name: {model_name}")
@@ -454,6 +499,54 @@ def concept_heatmaps(dataset_path: str, viscoin_pickle_path: str, device: str):
                 axs[row, column].set_title(columns[column], fontsize=8)
 
     plt.show()
+
+
+@main.command()
+@clip_adapter_path
+@vocab_path
+@click.option(
+    "--n-concepts",
+    help="The number of concepts",
+    type=int,
+    default=256,
+)
+@device
+def clip_concept_labels(clip_adapter_path: str, vocab_path: str, n_concepts: int, device: str):
+    """
+    Generate concept labels from a given vocabulary using the clip adapter model :
+        The clip adapter model is used to generate clip embeddings from concept space embeddings.
+        Those clip embeddings are then compared to the text embeddings of the vocabulary to get the concept labels.
+
+        We generate the concept space embeddings for each concept for instance by putting a 1 in the 9 corresponding positions of a vector of size n_concepts*9.
+
+    Args:
+        clip_adapter_path (str): Path to the clip adapter model
+        vocab_path (str): Path to the vocabulary file (.txt)
+        n_concepts (int): The number of concepts
+    """
+
+    clip_adapter = torch.load(clip_adapter_path).to(device)
+
+    clip_model, preprocess = clip.load("ViT-B/32", device=device)
+
+    with open(vocab_path, "r") as f:
+        vocab = f.readlines()
+
+    vocab = [v.strip() for v in vocab]
+
+    concept_labels, probs = get_concept_labels_vocab(
+        clip_adapter,
+        clip_model,
+        vocab,
+        n_concepts,
+        device,
+    )
+
+    # Save to file
+    with open("concept_labels.csv", "w") as f:
+        for i, label in enumerate(concept_labels):
+            probs_line = [str(v) for v in probs[i][0]]
+            f.write(f"{i}, {label}, [{' '.join(probs_line)}]\n")
 
 
 if __name__ == "__main__":

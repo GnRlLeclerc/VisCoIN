@@ -58,3 +58,21 @@ def viscoin_pickle_path(func):
         required=True,
         type=str,
     )(func)
+
+
+def clip_adapter_path(func):
+    return click.option(
+        "--clip-adapter-path",
+        help="The path to the clip adapter model",
+        required=True,
+        type=str,
+    )(func)
+
+
+def vocab_path(func):
+    return click.option(
+        "--vocab-path",
+        help="The path to the vocab file",
+        required=True,
+        type=str,
+    )(func)
