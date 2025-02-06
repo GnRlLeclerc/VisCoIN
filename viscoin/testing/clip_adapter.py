@@ -57,12 +57,10 @@ def test_adapter(
             classes, hidden = classifier.forward(inputs)
             concept_space, gan_helper_space = concept_extractor.forward(hidden[-3:])
 
-            predicted_clip_embedding = clip_adapter(
-                concept_space.view(-1, concept_extractor.n_concepts * 9)
-            )
+            output = clip_adapter(concept_space.view(-1, concept_extractor.n_concepts * 9))
 
             # Update metrics
-            total_loss += criterion(predicted_clip_embedding, clip_embeddings).item()
+            total_loss += criterion(output, clip_embeddings).item()
             total_samples += targets.size(0)
 
     batch_mean_loss = total_loss / len(dataloader)
@@ -98,15 +96,13 @@ def get_concept_labels_vocab(
     text_features = clip_model.encode_text(tokenized_vocab).float()
     normalized_text_features = text_features / text_features.norm(dim=-1, keepdim=True)
 
-    concept_space_embeddings = generate_concept_embeddings(n_concepts)
+    concept_space_embeddings = generate_concept_embeddings(n_concepts, method="ones")
 
     with torch.no_grad():
         for concept_embedding in concept_space_embeddings:
 
-            concept_embedding = concept_embedding.to(device)
-
             # Get the clip embeddings from the concept embeddings using the adapter
-            predicted_clip_embedding = clip_adapter(concept_embedding)
+            predicted_clip_embedding, mu, logvar = clip_adapter(concept_embedding.to(device))
 
             normalized_image_features = predicted_clip_embedding / predicted_clip_embedding.norm(
                 dim=-1, keepdim=True
@@ -143,7 +139,13 @@ def generate_concept_embeddings(n_concepts: int, method: str = "ones") -> list[t
         case "ones":
 
             for j in range(n_concepts):
-                concepts[j][j * 9 : (j + 1) * 9] = 1.0
+                concepts[j][0, j * 9 : (j + 1) * 9] = 1.0
+
+        case "soft":
+
+            for j in range(n_concepts):
+                concepts[j][0, :] = 0.2
+                concepts[j][0, j * 9 : (j + 1) * 9] = 0.8
 
         case _:
             raise ValueError(f"Invalid method: {method}")

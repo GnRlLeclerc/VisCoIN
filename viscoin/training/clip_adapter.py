@@ -1,38 +1,52 @@
-"""Classifier training functions.
-
-Best parameters:
-- Adam optimizer
-    - Learning rate: 0.001
-    - Weight decay: 1e-4
-- Epochs: 90
-- LR Scheduler: StepLR(step=30, gamma=0.1)
-- batch size: 32
-"""
-
 from torch import nn, optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from dataclasses import dataclass
 
-from viscoin.models.clip_adapter import ClipAdapter
+import torch
+from viscoin.models.clip_adapter import ClipAdapter, ClipAdapterVAE
 from viscoin.models.concept_extractors import ConceptExtractor
 from viscoin.models.classifiers import Classifier
 from viscoin.utils.logging import get_logger
+
+from viscoin.training.losses import vae_reconstruction_loss
 
 from viscoin.testing.clip_adapter import test_adapter
 
 from clip.model import CLIP
 
 
+@dataclass
+class ClipAdapterTrainingParams:
+    epochs: int = 30
+    learning_rate: float = 0.0001
+
+    train_criterion = nn.MSELoss()
+    test_criterion = nn.MSELoss()
+
+
+@dataclass
+class ClipAdapterVAETrainingParams:
+    epochs: int = 30
+    learning_rate: float = 0.0001
+
+    # output = (reconstruction, mu, logvar)
+    def train_criterion(self, output, clip_embedd):
+        return vae_reconstruction_loss(output[0], clip_embedd, output[1], output[2])
+
+    def test_criterion(self, output, clip_embedd):
+        return nn.functional.mse_loss(output[0], clip_embedd)
+
+
 def train_clip_adapter_cub(
-    clip_adapter: ClipAdapter,
+    clip_adapter: ClipAdapter | ClipAdapterVAE,
     concept_extractor: ConceptExtractor,
     classifier: Classifier,
     clip_model: CLIP,
     train_loader: DataLoader,
     test_loader: DataLoader,
     device: str,
-    epochs: int = 30,
-    learning_rate: float = 0.0001,
+    params: ClipAdapterTrainingParams | ClipAdapterVAETrainingParams,
 ):
     """Train the adapter to convert concept embeddings to clip embeddings.
 
@@ -52,10 +66,9 @@ def train_clip_adapter_cub(
     logger = get_logger()
 
     # Optimizer and scheduler
-    optimizer = optim.Adam(clip_adapter.parameters(), lr=learning_rate)
-    criterion = nn.MSELoss()
+    optimizer = optim.Adam(clip_adapter.parameters(), lr=params.learning_rate)
 
-    for epoch in tqdm(range(1, epochs + 1), "Training epochs"):
+    for epoch in (progress := tqdm(range(1, params.epochs + 1), "Training epochs")):
         ###########################################################################################
         #                                      TRAINING STEP                                      #
         ###########################################################################################
@@ -77,14 +90,12 @@ def train_clip_adapter_cub(
             classes, hidden = classifier.forward(inputs)
             concept_space, gan_helper_space = concept_extractor.forward(hidden[-3:])
 
-            predicted_clip_embedding = clip_adapter(
-                concept_space.view(-1, concept_extractor.n_concepts * 9)
-            )
+            output = clip_adapter(concept_space.view(-1, concept_extractor.n_concepts * 9))
 
             # Compute logits
             optimizer.zero_grad()
 
-            loss = criterion(predicted_clip_embedding, clip_embeddings)
+            loss = params.train_criterion(output, clip_embeddings)
 
             current_loss = loss.item()
 
@@ -110,7 +121,7 @@ def train_clip_adapter_cub(
             clip_model,
             test_loader,
             device,
-            criterion,
+            params.test_criterion,
             False,
         )
 
@@ -120,8 +131,10 @@ def train_clip_adapter_cub(
 
         # Log the current state of training
         logger.info(
-            f"Epoch {epoch}/{epochs} - Train Loss: {batch_mean_loss:.4f} - Test Loss: {mean_loss:.4f}"
+            f"Epoch {epoch}/{params.epochs} - Train Loss: {batch_mean_loss:.4f} - Test Loss: {mean_loss:.4f}"
         )
+
+        progress.set_postfix(train_loss=batch_mean_loss, test_loss=mean_loss, best_loss=best_loss)
 
     # Load the best model
     print(f"Best test loss: {best_loss:.4f}")

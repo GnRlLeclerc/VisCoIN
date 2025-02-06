@@ -27,7 +27,7 @@ from viscoin.models.classifiers import Classifier
 from viscoin.models.concept_extractors import ConceptExtractor
 from viscoin.models.explainers import Explainer
 from viscoin.models.gan import GeneratorAdapted
-from viscoin.models.clip_adapter import ClipAdapter
+from viscoin.models.clip_adapter import ClipAdapter, ClipAdapterVAE
 from viscoin.models.utils import load_viscoin, load_viscoin_pickle, save_viscoin_pickle
 from viscoin.testing.classifiers import test_classifier
 from viscoin.testing.concepts import test_concepts
@@ -40,7 +40,11 @@ from viscoin.testing.viscoin import (
 )
 from viscoin.training.classifiers import train_classifier_cub
 from viscoin.training.viscoin import TrainingParameters, train_viscoin_cub
-from viscoin.training.clip_adapter import train_clip_adapter_cub
+from viscoin.training.clip_adapter import (
+    train_clip_adapter_cub,
+    ClipAdapterTrainingParams,
+    ClipAdapterVAETrainingParams,
+)
 from viscoin.utils.cli import (
     batch_size,
     dataset_path,
@@ -168,15 +172,24 @@ def train(
                 device,
             )
 
-        case "clip_adapter":
+        case "clip_adapter" | "clip_adapter_vae":
 
             viscoin = load_viscoin_pickle("checkpoints/cub/viscoin-cub.pkl")
 
             clip_model, preprocess = clip.load("ViT-B/32", device=device)
 
-            clip_adapter = ClipAdapter(
-                viscoin.concept_extractor.n_concepts * 9, clip_model.visual.output_dim
-            ).to(device)
+            # Loading the appropriate clip adapter model
+            n_concepts = viscoin.concept_extractor.n_concepts
+            clip_embedding_dim = clip_model.visual.output_dim
+
+            if model_name == "clip_adapter":
+                clip_adapter = ClipAdapter(n_concepts * 9, clip_embedding_dim)
+                params = ClipAdapterTrainingParams(epochs=epochs, learning_rate=learning_rate)
+            elif model_name == "clip_adapter_vae":
+                clip_adapter = ClipAdapterVAE(n_concepts * 9, clip_embedding_dim)
+                params = ClipAdapterVAETrainingParams(epochs=epochs, learning_rate=learning_rate)
+
+            clip_adapter = clip_adapter.to(device)
 
             configure_score_logging(f"{model_name}_{epochs}.log")
 
@@ -196,8 +209,7 @@ def train(
                 train_loader,
                 test_loader,
                 device,
-                epochs,
-                learning_rate,
+                params,
             )
 
             torch.save(clip_adapter, output_weights)
