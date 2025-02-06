@@ -19,7 +19,7 @@ from clip.model import CLIP
 @dataclass
 class ClipAdapterTrainingParams:
     epochs: int = 30
-    learning_rate: float = 0.0001
+    learning_rate: float = 1e-5
 
     train_criterion = nn.MSELoss()
     test_criterion = nn.MSELoss()
@@ -28,7 +28,7 @@ class ClipAdapterTrainingParams:
 @dataclass
 class ClipAdapterVAETrainingParams:
     epochs: int = 30
-    learning_rate: float = 0.0001
+    learning_rate: float = 1e-5
 
     # output = (reconstruction, mu, logvar)
     def train_criterion(self, output, clip_embedd):

@@ -96,7 +96,7 @@ def get_concept_labels_vocab(
     text_features = clip_model.encode_text(tokenized_vocab).float()
     normalized_text_features = text_features / text_features.norm(dim=-1, keepdim=True)
 
-    concept_space_embeddings = generate_concept_embeddings(n_concepts, method="ones")
+    concept_space_embeddings = generate_concept_embeddings(n_concepts, method="soft")
 
     with torch.no_grad():
         for concept_embedding in concept_space_embeddings:

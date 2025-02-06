@@ -32,7 +32,12 @@ class ClipAdapterVAE(torch.nn.Module):
     """
 
     def __init__(
-        self, in_features: int, out_features: int, hidden_size: int = 1024, latent_size: int = 512
+        self,
+        in_features: int,
+        out_features: int,
+        hidden_size: int = 1024,
+        latent_size: int = 512,
+        dropout_rate: float = 0.4,
     ):
         """
         Args:
@@ -43,8 +48,11 @@ class ClipAdapterVAE(torch.nn.Module):
         """
         super(ClipAdapterVAE, self).__init__()
 
+        self.dropout_rate = dropout_rate
+
         # Encoder layers
         self.linear_enc = nn.Linear(in_features, hidden_size)
+        self.dropout_enc = nn.Dropout(self.dropout_rate)
 
         # Latent space
         self.linear_mu = nn.Linear(hidden_size, latent_size)
@@ -52,10 +60,12 @@ class ClipAdapterVAE(torch.nn.Module):
 
         # Decoder layers
         self.linear_dec = nn.Linear(latent_size, hidden_size)
+        self.dropout_dec = nn.Dropout(self.dropout_rate)
         self.linear_out = nn.Linear(hidden_size, out_features)
 
     def encode(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         h = F.relu(self.linear_enc(x))
+        h = self.dropout_enc(h)
         return self.linear_mu(h), self.linear_logvar(h)
 
     def reparameterize(self, mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
@@ -68,7 +78,8 @@ class ClipAdapterVAE(torch.nn.Module):
 
     def decode(self, z: torch.Tensor) -> torch.Tensor:
         h = F.relu(self.linear_dec(z))
-        reconstruction = torch.sigmoid(self.linear_out(h))
+        h = self.dropout_dec(h)
+        reconstruction = self.linear_out(h)
         return reconstruction
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:

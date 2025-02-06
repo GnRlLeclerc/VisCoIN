@@ -186,7 +186,9 @@ def train(
                 clip_adapter = ClipAdapter(n_concepts * 9, clip_embedding_dim)
                 params = ClipAdapterTrainingParams(epochs=epochs, learning_rate=learning_rate)
             elif model_name == "clip_adapter_vae":
-                clip_adapter = ClipAdapterVAE(n_concepts * 9, clip_embedding_dim)
+                clip_adapter = ClipAdapterVAE(
+                    n_concepts * 9, clip_embedding_dim, hidden_size=512, latent_size=128
+                )
                 params = ClipAdapterVAETrainingParams(epochs=epochs, learning_rate=learning_rate)
 
             clip_adapter = clip_adapter.to(device)
