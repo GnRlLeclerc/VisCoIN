@@ -22,6 +22,16 @@ from torch import Tensor
 from torch.utils.data import DataLoader
 import clip
 
+
+# Imports Trogon if installed : Terminal User Interface for Click commands
+try:
+    from trogon import tui
+except ImportError:
+
+    def tui():
+        return lambda f: f
+
+
 from viscoin.datasets.cub import CUB_200_2011
 from viscoin.models.classifiers import Classifier
 from viscoin.models.concept_extractors import ConceptExtractor
@@ -59,6 +69,7 @@ from viscoin.utils.logging import configure_score_logging
 from viscoin.utils.types import TestingResults, TrainingResults
 
 
+@tui()
 @click.group()
 def main():
     pass
