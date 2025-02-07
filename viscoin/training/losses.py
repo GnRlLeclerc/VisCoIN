@@ -199,19 +199,21 @@ def gan_regularization_loss(gan_latents: Tensor, model: GeneratorAdapted) -> Ten
 
 def vae_reconstruction_loss(recon_x, x, mu, logvar):
     """
-    VAE loss function combining the reconstruction loss (BCE) and the KL divergence.
+    VAE loss function combining the reconstruction loss and the KL divergence.
 
     Args:
-        recon_x: reconstructed input from the VAE (after sigmoid, values between 0 and 1)
+        recon_x: reconstructed input from the VAE
         x: original input
         mu: mean from the encoder's latent space
         logvar: log variance from the encoder's latent space
     """
 
+    beta = 2.0
+
     # Reconstruction loss: binary cross entropy summed over all elements in the batch
-    BCE = F.mse_loss(recon_x, x)
+    REC = F.mse_loss(recon_x, x)
 
     # KL divergence between the learned latent distribution and a standard normal distribution
     KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
-    return BCE + KLD
+    return REC + beta * KLD

@@ -524,8 +524,34 @@ def concept_heatmaps(dataset_path: str, viscoin_pickle_path: str, device: str):
     type=int,
     default=256,
 )
+@click.option(
+    "--clip-adapter-type",
+    help="The type of clip adapter model to use (clip_adapter or clip_adapter_vae)",
+    type=str,
+    default="clip_adapter",
+)
+@click.option(
+    "--concept-embedding-method",
+    help="The method to use to generate the concept space embeddings",
+    type=str,
+    default="ones",
+)
+@click.option(
+    "--output_path",
+    help="The path to save the concept labels",
+    type=str,
+    default="concept_labels.csv",
+)
 @device
-def clip_concept_labels(clip_adapter_path: str, vocab_path: str, n_concepts: int, device: str):
+def clip_concept_labels(
+    clip_adapter_path: str,
+    vocab_path: str,
+    n_concepts: int,
+    clip_adapter_type: str,
+    concept_embedding_method: str,
+    output_path: str,
+    device: str,
+):
     """
     Generate concept labels from a given vocabulary using the clip adapter model :
         The clip adapter model is used to generate clip embeddings from concept space embeddings.
@@ -553,14 +579,18 @@ def clip_concept_labels(clip_adapter_path: str, vocab_path: str, n_concepts: int
         clip_model,
         vocab,
         n_concepts,
+        clip_adapter_type,
+        concept_embedding_method,
         device,
     )
 
     # Save to file
-    with open("concept_labels.csv", "w") as f:
+    with open(output_path, "w") as f:
+
+        f.write("unit,description,similarity\n")
+
         for i, label in enumerate(concept_labels):
-            probs_line = [str(v) for v in probs[i][0]]
-            f.write(f"{i}, {label}, [{' '.join(probs_line)}]\n")
+            f.write(f"{i},{label},{probs[i]}\n")
 
 
 if __name__ == "__main__":

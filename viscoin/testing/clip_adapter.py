@@ -69,7 +69,13 @@ def test_adapter(
 
 
 def get_concept_labels_vocab(
-    clip_adapter: ClipAdapter, clip_model: CLIP, vocab: list[str], n_concepts: int, device: str
+    clip_adapter: ClipAdapter,
+    clip_model: CLIP,
+    vocab: list[str],
+    n_concepts: int,
+    clip_adapter_type: str,
+    concept_embedding_method: str,
+    device: str,
 ) -> tuple[list[str], list[torch.Tensor]]:
     """Get the concept labels vocabulary for the adapter
 
@@ -96,13 +102,18 @@ def get_concept_labels_vocab(
     text_features = clip_model.encode_text(tokenized_vocab).float()
     normalized_text_features = text_features / text_features.norm(dim=-1, keepdim=True)
 
-    concept_space_embeddings = generate_concept_embeddings(n_concepts, method="soft")
+    concept_space_embeddings = generate_concept_embeddings(
+        n_concepts, method=concept_embedding_method
+    )
 
     with torch.no_grad():
         for concept_embedding in concept_space_embeddings:
 
             # Get the clip embeddings from the concept embeddings using the adapter
-            predicted_clip_embedding, mu, logvar = clip_adapter(concept_embedding.to(device))
+            if clip_adapter_type == "clip_adapter_vae":
+                predicted_clip_embedding, mu, logvar = clip_adapter(concept_embedding.to(device))
+            else:
+                predicted_clip_embedding = clip_adapter(concept_embedding.to(device))
 
             normalized_image_features = predicted_clip_embedding / predicted_clip_embedding.norm(
                 dim=-1, keepdim=True
@@ -116,7 +127,7 @@ def get_concept_labels_vocab(
 
             concept_labels.append(vocab[idx])
 
-            probs_per_concept.append(list(probs))
+            probs_per_concept.append(probs.max())
 
     return concept_labels, probs_per_concept
 
@@ -144,8 +155,8 @@ def generate_concept_embeddings(n_concepts: int, method: str = "ones") -> list[t
         case "soft":
 
             for j in range(n_concepts):
-                concepts[j][0, :] = 0.2
-                concepts[j][0, j * 9 : (j + 1) * 9] = 0.8
+                concepts[j][0, :] = 0.1
+                concepts[j][0, j * 9 : (j + 1) * 9] = 10.0
 
         case _:
             raise ValueError(f"Invalid method: {method}")

@@ -37,7 +37,7 @@ class ClipAdapterVAE(torch.nn.Module):
         out_features: int,
         hidden_size: int = 1024,
         latent_size: int = 512,
-        dropout_rate: float = 0.4,
+        dropout_rate: float = 0.2,
     ):
         """
         Args:
@@ -52,6 +52,7 @@ class ClipAdapterVAE(torch.nn.Module):
 
         # Encoder layers
         self.linear_enc = nn.Linear(in_features, hidden_size)
+        self.bn_enc = nn.BatchNorm1d(hidden_size)
         self.dropout_enc = nn.Dropout(self.dropout_rate)
 
         # Latent space
@@ -60,11 +61,13 @@ class ClipAdapterVAE(torch.nn.Module):
 
         # Decoder layers
         self.linear_dec = nn.Linear(latent_size, hidden_size)
+        self.bn_dec = nn.BatchNorm1d(hidden_size)
         self.dropout_dec = nn.Dropout(self.dropout_rate)
         self.linear_out = nn.Linear(hidden_size, out_features)
 
     def encode(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         h = F.relu(self.linear_enc(x))
+        h = self.bn_enc(h)
         h = self.dropout_enc(h)
         return self.linear_mu(h), self.linear_logvar(h)
 
@@ -78,6 +81,7 @@ class ClipAdapterVAE(torch.nn.Module):
 
     def decode(self, z: torch.Tensor) -> torch.Tensor:
         h = F.relu(self.linear_dec(z))
+        h = self.bn_dec(h)
         h = self.dropout_dec(h)
         reconstruction = self.linear_out(h)
         return reconstruction

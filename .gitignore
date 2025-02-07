@@ -19,3 +19,6 @@ __pycache__/
 
 # Image outputs
 *.png
+
+# Concept Descriptions
+*.csv

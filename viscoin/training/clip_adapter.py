@@ -1,5 +1,5 @@
 from torch import nn, optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 from dataclasses import dataclass
 
@@ -125,7 +125,7 @@ def train_clip_adapter_cub(
             False,
         )
 
-        if loss < best_loss:
+        if mean_loss < best_loss:
             best_model = clip_adapter.state_dict()
             best_loss = mean_loss
 
@@ -139,3 +139,30 @@ def train_clip_adapter_cub(
     # Load the best model
     print(f"Best test loss: {best_loss:.4f}")
     clip_adapter.load_state_dict(best_model)
+
+
+def get_average_clip_embedding(loader: DataLoader, clip_model: CLIP, device: str) -> torch.Tensor:
+    """Compute the average clip embedding of a dataset
+
+    Args:
+        loader: the DataLoader containing the dataset
+        clip_model: the loaded CLIP model
+        device
+    """
+    clip_model.eval()
+
+    with torch.no_grad():
+        total_clip_embeddings = torch.zeros(512).to(device)
+        total_samples = 0
+
+        for inputs, _ in tqdm(loader, desc="Computing average clip embedding"):
+            # Move batch to device
+            inputs = inputs.to(device)
+
+            # Compute real clip embeddings
+            clip_embeddings = clip_model.encode_image(inputs).float()
+
+            total_clip_embeddings += clip_embeddings.sum(dim=0)
+            total_samples += inputs.size(0)
+
+    return total_clip_embeddings / total_samples
