@@ -28,6 +28,7 @@ def dataset_path(func):
     return click.option(
         "--dataset-path",
         help="The path to the dataset to use for training/testing",
+        default="./datasets/CUB_200_2011/",
         required=True,
         type=str,
     )(func)
@@ -55,6 +56,7 @@ def viscoin_pickle_path(func):
     return click.option(
         "--viscoin-pickle-path",
         help="The path to the viscoin pickle file",
+        default="./checkpoints/cub/viscoin-cub.pkl",
         required=True,
         type=str,
     )(func)

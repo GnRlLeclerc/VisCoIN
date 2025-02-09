@@ -193,7 +193,7 @@ def gan_regularization_loss(gan_latents: Tensor, model: GeneratorAdapted) -> Ten
 
 
 ###################################################################################################
-#                                  VAE TRAINING LOSS FUNCTIONS                                 #
+#                                  VAE TRAINING LOSS FUNCTIONS                                    #
 ###################################################################################################
 
 

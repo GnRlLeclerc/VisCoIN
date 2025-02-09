@@ -42,6 +42,7 @@ from viscoin.models.utils import load_viscoin, load_viscoin_pickle, save_viscoin
 from viscoin.testing.classifiers import test_classifier
 from viscoin.testing.concepts import test_concepts
 from viscoin.testing.clip_adapter import get_concept_labels_vocab
+from viscoin.testing.concept_label_metric import evaluate_concept_labels
 from viscoin.testing.viscoin import (
     ThresholdSelection,
     TopKSelection,
@@ -602,6 +603,67 @@ def clip_concept_labels(
 
         for i, label in enumerate(concept_labels):
             f.write(f"{i},{label},{probs[i]}\n")
+
+
+@main.command()
+@click.option(
+    "--expert-annotations-score-path",
+    help="The path to the expert annotations score file",
+    default="./checkpoints/saved_expert_annotations_score.npy",
+    type=str,
+    required=True,
+)
+@viscoin_pickle_path
+@click.option(
+    "--concept-labels-path",
+    help="The path to the predicted concept labels file",
+    type=str,
+    required=True,
+)
+@dataset_path
+@device
+@click.option(
+    "--evaluation-method",
+    help="The evaluation method to use: only topk is available for now",
+    type=str,
+    default="topk",
+)
+@click.option(
+    "--topk-value",
+    help="The value of k to use for the topk evaluation method",
+    type=int,
+    default=5,
+)
+@click.option(
+    "--neurons-to-study",
+    help="The indices of the neurons to study, if empty, 5 random neurons will be selected",
+    type=list[int],
+    default=[],  # Empty list means random neurons
+)
+def evalutate_concept_captions(
+    expert_annotations_score_path: str,
+    viscoin_pickle_path: str,
+    concept_labels_path: str,
+    dataset_path: str,
+    device: str,
+    evaluation_method: str,
+    topk_value: int,
+    neurons_to_study: int,
+):
+    """
+    Evaluate the provided predictions of concept labels against cub expert annotations.
+    """
+
+    evaluate_concept_labels(
+        expert_annotations_score_path,
+        viscoin_pickle_path,
+        dataset_path,
+        concept_labels_path,
+        device,
+        evaluation_method,
+        topk_value,
+        neurons_to_study,
+    )
 
 
 if __name__ == "__main__":

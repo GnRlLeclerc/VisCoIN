@@ -88,6 +88,43 @@ class CUB_200_2011(Dataset):
         # The whole dataset is not loaded instantly in memory, but only when needed.
         self.image_cache: dict[int, Tensor] = {}
 
+        self.load_attributes()
+
+    def load_attributes(self):
+        # Load the attributes labels as a dictionary: {attribute_id: label}
+        self.attributes_labels = {
+            int(k): v
+            for k, v in np.loadtxt(
+                os.path.join(self.dataset_path, "attributes", "attributes.txt"),
+                dtype=str,
+                delimiter=" ",
+            )
+        }
+
+        # Load the attributes for each image
+        self.attributes_file = np.loadtxt(
+            os.path.join(self.dataset_path, "attributes", "image_attribute_labels_clean.txt"),
+            dtype=int,
+            delimiter=" ",
+        )
+        self.attributes = [[]]
+
+        curr_img = 1
+        # We create an attribute list for each image by looping through all the attributes and selecting the present ones
+        for cols in self.attributes_file:
+
+            # If the current image is different from the previous one, append a new list
+            if cols[0] != curr_img:
+                self.attributes[curr_img - 1] = np.array(self.attributes[curr_img - 1])  # type: ignore
+                curr_img += 1
+                self.attributes.append([])
+
+            # If the attribute is present, append it to the list
+            if cols[2] == 1:
+                self.attributes[curr_img - 1].append(cols[1])
+
+        self.attributes[curr_img - 1] = np.array(self.attributes[curr_img - 1])  # type: ignore
+
     def load_image(self, index: int) -> Tensor:
         """Load an image by index, and apply the specified transformations.
         Note that tensors have reversed dimensions (C, H, W) instead of (H, W, C)."""
@@ -163,40 +200,6 @@ class Labeled_CUB_200_2011(CUB_200_2011):
         """
 
         super().__init__(dataset_path, mode, image_shape, bbox_only, transform)
-
-        # Load the attributes labels as a dictionary: {attribute_id: label}
-        self.attributes_labels = {
-            int(k): v
-            for k, v in np.loadtxt(
-                os.path.join(self.dataset_path, "attributes", "attributes.txt"),
-                dtype=str,
-                delimiter=" ",
-            )
-        }
-
-        # Load the attributes for each image
-        self.attributes_file = np.loadtxt(
-            os.path.join(self.dataset_path, "attributes", "image_attribute_labels_clean.txt"),
-            dtype=int,
-            delimiter=" ",
-        )
-        self.attributes = [[]]
-
-        curr_img = 1
-        # We create an attribute list for each image by looping through all the attributes and selecting the present ones
-        for cols in self.attributes_file:
-
-            # If the current image is different from the previous one, append a new list
-            if cols[0] != curr_img:
-                self.attributes[curr_img - 1] = np.array(self.attributes[curr_img - 1])  # type: ignore
-                curr_img += 1
-                self.attributes.append([])
-
-            # If the attribute is present, append it to the list
-            if cols[2] == 1:
-                self.attributes[curr_img - 1].append(cols[1])
-
-        self.attributes[curr_img - 1] = np.array(self.attributes[curr_img - 1])  # type: ignore
 
         self.attributes_per_label = attributes_per_label
 
