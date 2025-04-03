@@ -50,6 +50,27 @@ DATASET_CLASSES = {
     "funnybirds": 50,
 }
 
+DATASET_MODEL_PARAMS = {
+    "cub": {
+        "n_concepts": 256,
+    },
+    "funnybirds": {
+        "n_concepts": 50,
+    },
+}
+
+DATASET_DEFAULT_HPARAMS = {
+    "cub": TrainingParameters(),
+    "funnybirds": TrainingParameters(
+        gamma=0.2,
+        iterations=25000,
+        test_iterations=1000,
+        save_iterations=5000,
+        amplify_iterations=5000,
+        delta=1.0,
+    ),
+}
+
 
 @click.command()
 @batch_size
@@ -73,7 +94,7 @@ DATASET_CLASSES = {
     "--output-weights",
     help="The path/filename where to save the weights",
     type=str,
-    default="output-weights.pt",
+    default="output-weights.pkl",
 )
 @click.option(
     "--gradient-accumulation-steps",
@@ -126,6 +147,7 @@ def train(
                 epochs,
                 learning_rate,
                 output_weights,
+                dataset_type,
             )
 
         case "viscoin":
@@ -138,6 +160,7 @@ def train(
                 test_loader,
                 epochs,
                 gradient_accumulation_steps,
+                output_weights,
             )
 
         case "clip_adapter" | "clip_adapter_vae":
@@ -165,10 +188,13 @@ def setup_classifier_training(
     epochs: int,
     learning_rate: float,
     output_weights: str,
+    dataset_type: str,
 ):
     """Helper function to setup the training of a classifier"""
 
-    model = Classifier(output_classes=200, pretrained=pretrained).to(device)
+    model = Classifier(output_classes=DATASET_CLASSES[dataset_type], pretrained=pretrained).to(
+        device
+    )
 
     if pretrained:
         model.load_state_dict(torch.load(checkpoints, weights_only=True))
@@ -254,12 +280,14 @@ def setup_clip_adapter_training(
 
 def load_classifier(path: str, n_classes: int) -> Classifier:
     if not os.path.exists(path):
-        return Classifier(output_classes=n_classes)
+        raise FileNotFoundError(f"Classifier not found at {path}")
     else:
         return torch.load(path, weights_only=False)
 
 
-def load_gan(path_viscoin_gan: str, path_generator_gan: str) -> tuple[GeneratorAdapted, Generator]:
+def load_gan(
+    path_viscoin_gan: str, path_generator_gan: str, dataset_type: str
+) -> tuple[GeneratorAdapted, Generator]:
     # Generator GAN must be provided
     assert os.path.exists(path_generator_gan), f"Generator GAN not found."
 
@@ -267,7 +295,9 @@ def load_gan(path_viscoin_gan: str, path_generator_gan: str) -> tuple[GeneratorA
 
     # If the adapted generator does not exist, create it from the generator GAN
     if not os.path.exists(path_viscoin_gan):
-        viscoin_gan = GeneratorAdapted.from_gan(generator_gan)
+        viscoin_gan = GeneratorAdapted.from_gan(
+            generator_gan, z_dim=DATASET_MODEL_PARAMS[dataset_type]["n_concepts"]
+        )
         torch.save(viscoin_gan, path_viscoin_gan)
     else:
         viscoin_gan = torch.load(path_viscoin_gan, weights_only=False)
@@ -284,20 +314,29 @@ def setup_viscoin_training(
     test_loader: DataLoader,
     epochs: int,
     gradient_accumulation_steps: int,
+    output_weights: str,
 ):
     """Helper function to setup the training of viscoin"""
 
-    concept_extractor = ConceptExtractor().to(device)
-    explainer = Explainer(n_classes=DATASET_CLASSES[dataset_type]).to(device)
+    concept_extractor = ConceptExtractor(
+        n_concepts=DATASET_MODEL_PARAMS[dataset_type]["n_concepts"]
+    ).to(device)
+    explainer = Explainer(
+        n_concepts=DATASET_MODEL_PARAMS[dataset_type]["n_concepts"],
+        n_classes=DATASET_CLASSES[dataset_type],
+    ).to(device)
 
     classifier = load_classifier(
         DEFAULT_CHECKPOINTS[dataset_type]["classifier"], DATASET_CLASSES[dataset_type]
-    ).to(device)
+    )
+
     viscoin_gan, generator_gan = load_gan(
         DEFAULT_CHECKPOINTS[dataset_type]["gan_adapted"],
         DEFAULT_CHECKPOINTS[dataset_type]["gan"],
+        dataset_type=dataset_type,
     )
 
+    classifier = classifier.to(device)
     viscoin_gan = viscoin_gan.to(device)
     generator_gan = generator_gan.to(device)
 
@@ -307,8 +346,9 @@ def setup_viscoin_training(
     configure_score_logging(f"viscoin_{epochs}.log")
 
     # Using the default parameters for training on CUB
-    params = TrainingParameters()
+    params = DATASET_DEFAULT_HPARAMS[dataset_type]
     params.gradient_accumulation = gradient_accumulation_steps
+    params.n_classes = DATASET_CLASSES[dataset_type]
 
     # The training saves the viscoin model regularly
     train_viscoin(
@@ -322,6 +362,8 @@ def setup_viscoin_training(
         params,
         device,
     )
+
+    save_viscoin_pickle(classifier, concept_extractor, explainer, viscoin_gan, output_weights)
 
 
 @click.command()
@@ -376,13 +418,24 @@ def test(
 @click.command()
 @click.option("--checkpoints", help="The path to load the checkpoints", type=str)
 @click.option("--output", help="The path to generate the pickle to", type=str)
-def to_pickle(checkpoints: str, output: str):
+@dataset_type
+def to_pickle(checkpoints: str, output: str, dataset_type: str):
     """Convert safetensors to a pickled viscoin model using default parameters"""
 
-    classifier = Classifier()
-    concept_extractor = ConceptExtractor()
-    explainer = Explainer()
-    gan = GeneratorAdapted()
+    classifier = Classifier(output_classes=DATASET_CLASSES[dataset_type])
+    concept_extractor = ConceptExtractor(
+        n_concepts=DATASET_MODEL_PARAMS[dataset_type]["n_concepts"]
+    )
+    explainer = Explainer(
+        n_concepts=DATASET_MODEL_PARAMS[dataset_type]["n_concepts"],
+        n_classes=DATASET_CLASSES[dataset_type],
+    )
+    gan = GeneratorAdapted(
+        # GAN with funnybirds has different channel base
+        # synthesis_kwargs={
+        #     "channel_base": 32768 // 2,
+        # }
+    )
 
     load_viscoin(classifier, concept_extractor, explainer, gan, checkpoints)
     save_viscoin_pickle(classifier, concept_extractor, explainer, gan, output)

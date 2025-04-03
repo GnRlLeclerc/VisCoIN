@@ -24,3 +24,6 @@ __pycache__/
 *.csv
 
 *.npy
+
+# Slurm scripts
+*.bash

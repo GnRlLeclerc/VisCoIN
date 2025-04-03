@@ -15,6 +15,7 @@ from torch import Tensor
 from torch.utils.data import DataLoader
 
 from viscoin.datasets.cub import CUB_200_2011
+from viscoin.datasets.funnybirds import FunnyBirds
 from viscoin.models.utils import load_viscoin_pickle
 from viscoin.testing.concepts import test_concepts
 
@@ -31,6 +32,7 @@ from viscoin.cli.utils import (
     dataset_path,
     device,
     viscoin_pickle_path,
+    dataset_type,
 )
 
 from viscoin.utils.gradcam import GradCAM
@@ -38,9 +40,22 @@ from viscoin.utils.images import from_torch, heatmap_to_img, overlay
 from viscoin.utils.types import TestingResults, TrainingResults
 
 
+def load_test_dataset(dataset_path: str, dataset_type: str):
+    """Helper function to load the test dataset"""
+    match dataset_type:
+        case "cub":
+            dataset = CUB_200_2011(dataset_path, mode="test")
+        case "funnybirds":
+            dataset = FunnyBirds(dataset_path, mode="test")
+        case _:
+            raise ValueError("Invalid dataset type")
+    return dataset
+
+
 @click.command()
 @dataset_path
 @viscoin_pickle_path
+@dataset_type
 @device
 @click.option(
     "--concept-threshold",
@@ -55,6 +70,7 @@ from viscoin.utils.types import TestingResults, TrainingResults
 def amplify(
     dataset_path: str,
     viscoin_pickle_path: str,
+    dataset_type: str,
     concept_threshold: float | None,
     concept_top_k: int | None,
     device: str,
@@ -64,7 +80,8 @@ def amplify(
 
     # Load dataset and models
     models = load_viscoin_pickle(viscoin_pickle_path)
-    dataset = CUB_200_2011(dataset_path, mode="test")
+
+    dataset = load_test_dataset(dataset_path, dataset_type)
 
     # Move models to device
     classifier = models.classifier.to(device)
@@ -109,6 +126,7 @@ def amplify(
 
 @click.command()
 @dataset_path
+@dataset_type
 @viscoin_pickle_path
 @batch_size
 @device
@@ -119,6 +137,7 @@ def amplify(
 )
 def concepts(
     dataset_path: str,
+    dataset_type: str,
     viscoin_pickle_path: str,
     batch_size: int,
     force: bool,
@@ -129,7 +148,8 @@ def concepts(
     if force or not os.path.isfile("concept_results.pkl"):
         # Recompute the concept results
 
-        dataset = CUB_200_2011(dataset_path, mode="test")
+        dataset = load_test_dataset(dataset_path, dataset_type)
+
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
         viscoin = load_viscoin_pickle(viscoin_pickle_path)
@@ -187,9 +207,10 @@ def logs(logs_path: str):
 
 @click.command()
 @dataset_path
+@dataset_type
 @viscoin_pickle_path
 @device
-def concept_heatmaps(dataset_path: str, viscoin_pickle_path: str, device: str):
+def concept_heatmaps(dataset_path: str, dataset_type: str, viscoin_pickle_path: str, device: str):
     """Generate heatmaps for random images of the dataset, for the 5 convolutional layers of the concept extractor,
     using GradCAM."""
 
@@ -197,7 +218,7 @@ def concept_heatmaps(dataset_path: str, viscoin_pickle_path: str, device: str):
 
     # Load dataset and models
     models = load_viscoin_pickle(viscoin_pickle_path)
-    dataset = CUB_200_2011(dataset_path, mode="test")
+    dataset = load_test_dataset(dataset_path, dataset_type)
 
     # Move models to device
     classifier = models.classifier.to(device)
@@ -283,6 +304,7 @@ def concept_heatmaps(dataset_path: str, viscoin_pickle_path: str, device: str):
 @click.command()
 @viscoin_pickle_path
 @dataset_path
+@dataset_type
 @click.option(
     "--concept-labels-path",
     help="The path to the concept labels file",
@@ -302,6 +324,7 @@ def concept_heatmaps(dataset_path: str, viscoin_pickle_path: str, device: str):
 def amplify_single(
     viscoin_pickle_path: str,
     dataset_path: str,
+    dataset_type: str,
     concept_labels_path: str,
     concept_indices: list[int],
     image_indices: list[int],
@@ -349,7 +372,7 @@ def amplify_single(
     print("Selected image indices: ", image_indices)
 
     viscoin = load_viscoin_pickle(viscoin_pickle_path)
-    dataset = CUB_200_2011(dataset_path, mode="test")
+    dataset = load_test_dataset(dataset_path, dataset_type)
 
     images_batch = []
     amplified_images_batch = []

@@ -5,6 +5,7 @@ import clip
 
 from viscoin.cli.utils import (
     dataset_path,
+    dataset_type,
     device,
     viscoin_pickle_path,
     clip_adapter_path,
@@ -12,6 +13,7 @@ from viscoin.cli.utils import (
 )
 
 from viscoin.datasets.cub import CUB_200_2011
+from viscoin.datasets.funnybirds import FunnyBirds
 
 from viscoin.models.utils import load_viscoin_pickle
 from viscoin.testing.clip_adapter import get_concept_labels_vocab
@@ -29,6 +31,7 @@ from viscoin.testing.concept_label_metric import evaluate_concept_labels
     default=256,
 )
 @dataset_path
+@dataset_type
 @click.option(
     "--amplify-multiplier",
     help="The multiplier to amplify to the concept",
@@ -54,6 +57,7 @@ def clip_concept_labels(
     viscoin_pickle_path: str,
     n_concepts: int,
     dataset_path: str,
+    dataset_type: str,
     amplify_multiplier: float,
     selection_n: int,
     output_path: str,
@@ -95,7 +99,13 @@ def clip_concept_labels(
     vocab = [v.strip() for v in vocab]
 
     # Load the dataset
-    dataset = CUB_200_2011(dataset_path, mode="test")
+    match dataset_type:
+        case "cub":
+            dataset = CUB_200_2011(dataset_path)
+        case "funnybirds":
+            dataset = FunnyBirds(dataset_path)
+        case _:
+            raise ValueError(f"Dataset type {dataset_type} not supported")
 
     concept_labels, probs, most_activating_images = get_concept_labels_vocab(
         clip_adapter,
@@ -161,6 +171,7 @@ def evalutate_concept_captions(
     viscoin_pickle_path: str,
     concept_labels_path: str,
     dataset_path: str,
+    dataset_type: str,
     device: str,
     evaluation_method: str,
     topk_value: int,
@@ -172,10 +183,18 @@ def evalutate_concept_captions(
 
     neurons_to_study = [int(i) for i in neurons_to_study.split(",")] if neurons_to_study else []
 
+    match dataset_type:
+        case "cub":
+            dataset = CUB_200_2011(dataset_path)
+        case "funnybirds":
+            dataset = FunnyBirds(dataset_path)
+        case _:
+            raise ValueError(f"Dataset type {dataset_type} not supported")
+
     evaluate_concept_labels(
         expert_annotations_score_path,
         viscoin_pickle_path,
-        dataset_path,
+        dataset,
         concept_labels_path,
         device,
         evaluation_method,
