@@ -2,7 +2,6 @@ import os
 import sys
 
 import click
-import clip
 import torch
 from torch.utils.data import DataLoader
 
@@ -10,6 +9,7 @@ from viscoin.cli.utils import batch_size, dataset_type, device
 from viscoin.datasets.cub import CUB_200_2011
 from viscoin.datasets.funnybirds import FunnyBirds
 from viscoin.models.classifiers import Classifier
+from viscoin.models.clip import CLIP
 from viscoin.models.concept2clip import Concept2CLIP
 from viscoin.models.concept_extractors import ConceptExtractor
 from viscoin.models.explainers import Explainer
@@ -187,27 +187,25 @@ def setup_concept2clip_training(
 
     viscoin = load_viscoin_pickle("checkpoints/cub/viscoin-cub.pkl")
 
-    clip_model, preprocess = clip.load("ViT-B/32", device=device)
+    clip_model = CLIP(device)
 
     # Loading the appropriate clip adapter model
     n_concepts = viscoin.concept_extractor.n_concepts
-    clip_embedding_dim = clip_model.visual.output_dim
-
-    concept2clip = Concept2CLIP(n_concepts * 9, clip_embedding_dim)
+    concept2clip = Concept2CLIP(n_concepts * 9, clip_model.embedding_size)
     params = Concept2ClipTrainingParams(epochs=epochs, learning_rate=learning_rate)
 
     concept2clip = concept2clip.to(device)
 
-    configure_score_logging(f"{model_type}_{epochs}.log")
+    configure_score_logging(f"{model_type}_{epochs}.jsonl")
 
     # Creating new dataloader with the clip preprocess as clip does not work with all image sizes
     match dataset_type:
         case "cub":
-            train_dataset = CUB_200_2011(mode="train", transform=preprocess)
-            test_dataset = CUB_200_2011(mode="test", transform=preprocess)
+            train_dataset = CUB_200_2011(mode="train")
+            test_dataset = CUB_200_2011(mode="test")
         case "funnybirds":
-            train_dataset = FunnyBirds(mode="train", transform=preprocess)
-            test_dataset = FunnyBirds(mode="test", transform=preprocess)
+            train_dataset = FunnyBirds(mode="train")
+            test_dataset = FunnyBirds(mode="test")
         case _:
             raise ValueError(f"Unknown dataset type: {dataset_type}")
 
@@ -220,6 +218,7 @@ def setup_concept2clip_training(
         viscoin.concept_extractor.to(device),
         concept2clip,
         clip_model,
+        dataset_type,
         train_loader,
         test_loader,
         device,

@@ -13,13 +13,19 @@ from viscoin.datasets.cub import CUB_200_2011
 from viscoin.datasets.funnybirds import FunnyBirds
 
 
+def _cache(mode: Literal["train", "test"], dataset: str, model: str) -> str:
+    model = model.replace("/", "-")
+    return f"checkpoints/clip/{model}_{dataset}_{mode}.pt"
+
+
 class CLIP(nn.Module):
     """CLIP model wrapper to make it explicit which version of CLIP we are using, and the embedding size."""
 
     def __init__(self, device: str = "cuda"):
         super().__init__()
 
-        model, preprocess = clip.load("ViT-B/32", device=device)
+        self.kind = "ViT-B/32"
+        model, preprocess = clip.load(self.kind, device=device)
         self.model = model
         self.preprocess = preprocess
         self.embedding_size = model.visual.output_dim
@@ -38,8 +44,8 @@ class CLIP(nn.Module):
         """
 
         try:
-            train_embeddings = torch.load(f"checkpoints/clip/{dataset}_train.pt", weights_only=True)
-            test_embeddings = torch.load(f"checkpoints/clip/{dataset}_test.pt", weights_only=True)
+            train_embeddings = torch.load(_cache("train", dataset, self.kind), weights_only=True)
+            test_embeddings = torch.load(_cache("test", dataset, self.kind), weights_only=True)
             return train_embeddings, test_embeddings
         except FileNotFoundError:
             pass
@@ -51,6 +57,8 @@ class CLIP(nn.Module):
             case "funnybirds":
                 train = FunnyBirds("train", transform=self.preprocess)
                 test = FunnyBirds("test", transform=self.preprocess)
+            case _:
+                raise ValueError(f"Unknown dataset: {dataset}")
 
         self.eval()
 
@@ -81,7 +89,7 @@ class CLIP(nn.Module):
 
         # Save the embeddings to cache
         os.makedirs("checkpoints/clip", exist_ok=True)
-        torch.save(train_embeddings, f"checkpoints/clip/{dataset}_train.pt")
-        torch.save(test_embeddings, f"checkpoints/clip/{dataset}_test.pt")
+        torch.save(train_embeddings, _cache("train", dataset, self.kind))
+        torch.save(test_embeddings, _cache("test", dataset, self.kind))
 
         return train_embeddings, test_embeddings

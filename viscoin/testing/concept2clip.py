@@ -4,7 +4,7 @@ import clip
 import numpy as np
 import torch
 from clip.model import CLIP
-from torch import nn
+from torch.nn import functional as F
 from torch.types import Number
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -18,61 +18,55 @@ from viscoin.utils.metrics import cosine_matching
 
 def test_concept2clip(
     concept2clip: Concept2CLIP,
-    classifier: Classifier,
-    concept_extractor: ConceptExtractor,
-    clip_model: CLIP,
-    dataloader: DataLoader,
+    concept_loader: DataLoader,
+    clip_loader: DataLoader,
     device: str,
-    criterion: nn.Module | None = None,
     verbose: bool = True,
 ) -> tuple[float, float]:
-    """Test the clip adapter performance across a testing Dataloader
+    """Test concept2clip model on the given dataset.
+
+    Cosine matching metric is computed accross batches.
 
     Args:
-        model: the classifier model to test
-        dataloader: the DataLoader containing the testing dataset
+        concept2clip: trained clip adapter model to be tested
+        concept_loader: Dataloader of precomputed concept spaces
+        clip_loader: Dataloader of precomputed CLIP embeddings
         device: the device to use for the testing
-        criterion: the loss function to use for the test (default: nn.CrossEntropyLoss)
         verbose: whether to print the progress bar (default: True)
 
     Returns:
-        accuracy: the accuracy of the model on the testing dataset
-        batch_mean_loss: the mean loss per batch on the testing dataset
+        loss: average l2 mse loss
+        accuracy: average cosine matching accuracy
     """
-    if criterion is None:
-        criterion = nn.MSELoss()
 
     concept2clip.eval()
+    batch_size = concept_loader.batch_size
+
+    assert (concept_loader.batch_size == clip_loader.batch_size) and (batch_size is not None)
 
     with torch.no_grad():
-        total_loss = 0
-        total_samples = 0
+        loss = 0
         matching_accuracy = 0
 
-        for inputs, targets in tqdm(dataloader, desc="Test batches", disable=not verbose):
+        for concepts, embeddings in tqdm(
+            zip(concept_loader, clip_loader), desc="Test batches", disable=not verbose
+        ):
             # Move batch to device
-            inputs, targets = inputs.to(device), targets.to(device)
+            concepts, embeddings = concepts.to(device), embeddings.to(device)
 
-            # Compute logits & predictions
-            # Compute real clip embeddings
-            clip_embeddings = clip_model.encode_image(inputs)
-
-            # Predicted clip embeddings
-            _, hidden = classifier.forward(inputs)
-            concept_space, _ = concept_extractor.forward(hidden[-3:])
-
-            output = concept2clip(concept_space.view(-1, concept_extractor.n_concepts * 9))
+            output = concept2clip(concepts)
 
             # Update metrics
-            total_loss += criterion(output, clip_embeddings).item()
-            matching_accuracy += cosine_matching(output, clip_embeddings)
-            total_samples += targets.size(0)
+            loss += F.mse_loss(output, embeddings).item() / batch_size
+            matching_accuracy += cosine_matching(output, embeddings) / batch_size
 
-    batch_mean_loss = total_loss / len(dataloader)
+    loss /= len(concept_loader)
+    matching_accuracy /= len(concept_loader)
 
-    return (batch_mean_loss, matching_accuracy / len(dataloader))
+    return loss, matching_accuracy
 
 
+# TODO: cleanup
 def get_concept_labels_vocab(
     concept2clip: Concept2CLIP,
     concept_extractor: ConceptExtractor,
