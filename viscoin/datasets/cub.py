@@ -33,7 +33,6 @@ class CUB_200_2011(Dataset):
     def __init__(
         self,
         mode: Mode = "train",
-        image_shape: tuple[int, int] = (256, 256),
         bbox_only=False,
         transform: Compose | None = None,
     ) -> None:
@@ -42,16 +41,14 @@ class CUB_200_2011(Dataset):
         Args:
             dataset_path: Path to the downloaded dataset. Defaults to "datasets/CUB_200_2011".
             mode: Whether to consider training or testing data. Defaults to "train".
-            image_shape: the shape to resize each image (the dataset does not have normalized shapes). Note that (224, 224) is the default shape for ResNets.
             bbox_only: Whether to crop the images to include only the bounding box of the bird.
             transform: Additional optional transformations to perform on loaded images. Will default to the appropriate one given the mode.
         """
 
         self.dataset_path = os.path.join(
-            kagglehub.dataset_download("wenewone/cub2002011", "CUB_200_2011")
+            kagglehub.dataset_download("wenewone/cub2002011"), "CUB_200_2011"
         )
         self.mode: Mode = mode
-        self.image_shape = image_shape
         self.bbox_only = bbox_only
 
         # Load appropriate transformations if none are provided
@@ -190,7 +187,6 @@ class Labeled_CUB_200_2011(CUB_200_2011):
         self,
         attributes_per_label: int = 3,
         mode: Mode = "train",
-        image_shape: tuple[int, int] = (256, 256),
         bbox_only=False,
         transform: Compose | None = None,
     ) -> None:
@@ -199,12 +195,11 @@ class Labeled_CUB_200_2011(CUB_200_2011):
             dataset_path: Path to the downloaded dataset. Defaults to "datasets/CUB_200_2011".
             attributes_per_label: Number of attributes to include in the caption.
             mode: Whether to consider training or testing data. Defaults to "train".
-            image_shape: the shape to resize each image (the dataset does not have normalized shapes). Note that (224, 224) is the default shape for ResNets.
             bbox_only: Whether to crop the images to include only the bounding box of the bird.
             transform: Additional optional transformations to perform on loaded images. Will default to the appropriate one given the mode.
         """
 
-        super().__init__(mode, image_shape, bbox_only, transform)
+        super().__init__(mode, bbox_only, transform)
 
         self.attributes_per_label = attributes_per_label
 

@@ -16,7 +16,7 @@ from viscoin.models.concept_extractors import ConceptExtractor
 from viscoin.utils.metrics import cosine_matching
 
 
-def test_adapter(
+def test_concept2clip(
     concept2clip: Concept2CLIP,
     classifier: Classifier,
     concept_extractor: ConceptExtractor,
@@ -179,7 +179,6 @@ def get_concept_labels_vocab(
 
     # Step 5: Get top vocab words
     concept_labels: list[str] = []
-    # TODO : type à vérif, ptet call item() pour avoir un Number
     probs: list[Number] = []
     for concept_idx in range(n_concepts):
         top_idx = torch.argmax(mean_concept_label_similarity[concept_idx])

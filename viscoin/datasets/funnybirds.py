@@ -27,7 +27,6 @@ class FunnyBirds(Dataset):
     def __init__(
         self,
         mode: Mode = "train",
-        image_shape: tuple[int, int] = (256, 256),
         transform: Compose | None = None,
     ) -> None:
         """Instantiate a FunnyBirds dataset. Its result is saved in a pickle file for faster reloading.
@@ -35,7 +34,6 @@ class FunnyBirds(Dataset):
         Args:
             dataset_path: Path to the downloaded dataset. Defaults to "datasets/FunnyBirds".
             mode: Whether to consider training or testing data. Defaults to "train".
-            image_shape: the shape to resize each image (the dataset does not have normalized shapes). Note that (224, 224) is the default shape for ResNets.
             bbox_only: Whether to crop the images to include only the bounding box of the bird.
             transform: Additional optional transformations to perform on loaded images. Will default to the appropriate one given the mode.
         """
@@ -47,7 +45,6 @@ class FunnyBirds(Dataset):
 
         self.dataset_path = dataset_path(DATASET_NAME)
         self.mode: Mode = mode
-        self.image_shape = image_shape
 
         # Load appropriate transformations if none are provided
         if transform is None:

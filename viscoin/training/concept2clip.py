@@ -11,13 +11,13 @@ from viscoin.models.classifiers import Classifier
 from viscoin.models.concept2clip import Concept2CLIP
 from viscoin.models.concept_extractors import ConceptExtractor
 from viscoin.models.gan import GeneratorAdapted
-from viscoin.testing.concept2clip import test_adapter
+from viscoin.testing.concept2clip import test_concept2clip
 from viscoin.training.losses import InfoNCE
 from viscoin.utils.logging import get_logger
 
 
 @dataclass
-class ClipAdapterTrainingParams:
+class Concept2ClipTrainingParams:
     epochs: int = 30
     learning_rate: float = 1e-5
 
@@ -26,28 +26,28 @@ class ClipAdapterTrainingParams:
 
 
 def train_concept2clip(
-    concept2clip: Concept2CLIP,
-    concept_extractor: ConceptExtractor,
     classifier: Classifier,
-    viscoin_gan: GeneratorAdapted,
+    concept_extractor: ConceptExtractor,
+    concept2clip: Concept2CLIP,
     clip_model: CLIP,
     train_loader: DataLoader,
     test_loader: DataLoader,
     device: str,
-    params: ClipAdapterTrainingParams,
+    params: Concept2ClipTrainingParams,
 ):
     """Train the adapter to convert concept embeddings to clip embeddings.
 
     Note: the losses are averaged over batches.
 
     Args:
-        model: the classifier model to train
-        clip_model: the loaded CLIP model
-        train_loader: the DataLoader containing the training dataset
-        test_loader: the DataLoader containing the testing dataset
-        device: the device to use for training
-        epochs: the number of epochs to train the model
-        learning_rate: the learning rate for the optimizer
+        classifier: viscoin classifier
+        concept_extractor: viscoin concept extractor
+        concept2clip: concept2clip model to train
+        clip_model: CLIP model used to compute embeddings
+        train_loader: DataLoader containing the training dataset
+        test_loader: DataLoader containing the testing dataset
+        device: device to use for training
+        params: training parameters
     """
     best_loss = float("inf")
     best_model = concept2clip.state_dict()
@@ -128,7 +128,7 @@ def train_concept2clip(
         #                                       TESTING STEP                                      #
         ###########################################################################################
 
-        mean_loss, matching_accuracy = test_adapter(
+        mean_loss, matching_accuracy = test_concept2clip(
             concept2clip,
             classifier,
             concept_extractor,

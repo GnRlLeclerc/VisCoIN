@@ -17,7 +17,7 @@ from viscoin.models.gan import GeneratorAdapted
 from viscoin.models.utils import load_viscoin, load_viscoin_pickle, save_viscoin_pickle
 from viscoin.testing.classifiers import test_classifier
 from viscoin.training.classifiers import train_classifier
-from viscoin.training.concept2clip import ClipAdapterTrainingParams, train_concept2clip
+from viscoin.training.concept2clip import Concept2ClipTrainingParams, train_concept2clip
 from viscoin.training.viscoin import TrainingParameters, train_viscoin
 from viscoin.utils.logging import configure_score_logging
 
@@ -106,7 +106,6 @@ def train(
 
     match model_name:
         case "classifier":
-            # TODO : bad type, corriger ça aussi...
             setup_classifier_training(
                 checkpoints,
                 device,
@@ -128,7 +127,7 @@ def train(
                 gradient_accumulation_steps,
             )
 
-        case "concept2clip" | "concept2clip_vae":
+        case "concept2clip":
             setup_concept2clip_training(
                 model_name,
                 device,
@@ -194,11 +193,8 @@ def setup_concept2clip_training(
     n_concepts = viscoin.concept_extractor.n_concepts
     clip_embedding_dim = clip_model.visual.output_dim
 
-    if model_type == "concept2clip":
-        concept2clip = Concept2CLIP(n_concepts * 9, clip_embedding_dim)
-        params = ClipAdapterTrainingParams(epochs=epochs, learning_rate=learning_rate)
-    else:
-        raise ValueError(f"Unknown model type: {model_type}")
+    concept2clip = Concept2CLIP(n_concepts * 9, clip_embedding_dim)
+    params = Concept2ClipTrainingParams(epochs=epochs, learning_rate=learning_rate)
 
     concept2clip = concept2clip.to(device)
 
@@ -220,10 +216,9 @@ def setup_concept2clip_training(
 
     # The training saves the viscoin model regularly
     train_concept2clip(
-        concept2clip,
-        viscoin.concept_extractor.to(device),
         viscoin.classifier.to(device),
-        viscoin.gan.to(device),
+        viscoin.concept_extractor.to(device),
+        concept2clip,
         clip_model,
         train_loader,
         test_loader,
