@@ -9,8 +9,7 @@ from torch import Tensor, nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from viscoin.datasets.cub import CUB_200_2011
-from viscoin.datasets.funnybirds import FunnyBirds
+from viscoin.datasets.utils import get_datasets
 
 
 def _cache(mode: Literal["train", "test"], dataset: str, model: str) -> str:
@@ -19,7 +18,11 @@ def _cache(mode: Literal["train", "test"], dataset: str, model: str) -> str:
 
 
 class CLIP(nn.Module):
-    """CLIP model wrapper to make it explicit which version of CLIP we are using, and the embedding size."""
+    """CLIP model wrapper to make it explicit which version of CLIP we are using, and the embedding size.
+
+    NOTE: CLIP embeddings for a same image or text are not deterministic and depend on the batch size.
+    The difference is usually of the order of 1e-3.
+    """
 
     def __init__(self, device: str = "cuda"):
         super().__init__()
@@ -30,6 +33,12 @@ class CLIP(nn.Module):
         self.preprocess = preprocess
         self.embedding_size = model.visual.output_dim
         self.device = device
+
+    def encode_image(self, x: Tensor) -> Tensor:
+        return self.model.encode_image(x)
+
+    def encode_text(self, x: Tensor) -> Tensor:
+        return self.model.encode_text(x)
 
     def compute_embeddings(self, dataset: Literal["cub", "funnybirds"]) -> tuple[Tensor, Tensor]:
         """Compute CLIP embeddings on the given datasets.
@@ -50,15 +59,7 @@ class CLIP(nn.Module):
         except FileNotFoundError:
             pass
 
-        match dataset:
-            case "cub":
-                train = CUB_200_2011("train", transform=self.preprocess)
-                test = CUB_200_2011("test", transform=self.preprocess)
-            case "funnybirds":
-                train = FunnyBirds("train", transform=self.preprocess)
-                test = FunnyBirds("test", transform=self.preprocess)
-            case _:
-                raise ValueError(f"Unknown dataset: {dataset}")
+        train, test = get_datasets(dataset, transform=self.preprocess)
 
         self.eval()
 
@@ -75,7 +76,7 @@ class CLIP(nn.Module):
             batch = batch.to(self.device)
             with torch.no_grad():
                 train_embeddings[i * batch_size : (i + 1) * batch_size] = (
-                    self.model.encode_image(batch).detach().cpu()
+                    self.encode_image(batch).detach().cpu()
                 )
 
         for i, (batch, _) in enumerate(
@@ -84,7 +85,7 @@ class CLIP(nn.Module):
             batch = batch.to(self.device)
             with torch.no_grad():
                 test_embeddings[i * batch_size : (i + 1) * batch_size] = (
-                    self.model.encode_image(batch).detach().cpu()
+                    self.encode_image(batch).detach().cpu()
                 )
 
         # Save the embeddings to cache

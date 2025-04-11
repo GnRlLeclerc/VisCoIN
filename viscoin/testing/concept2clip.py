@@ -18,8 +18,7 @@ from viscoin.utils.metrics import cosine_matching
 
 def test_concept2clip(
     concept2clip: Concept2CLIP,
-    concept_loader: DataLoader,
-    clip_loader: DataLoader,
+    loader: DataLoader,
     device: str,
     verbose: bool = True,
 ) -> tuple[float, float]:
@@ -27,10 +26,14 @@ def test_concept2clip(
 
     Cosine matching metric is computed accross batches.
 
+    WARNING: SHUFFLE THE TEST DATALOADER!
+    On some datasets like CUB, pictures of birds of the same classes follow each other
+    in the dataset. Because concept2clip is about contrastive learning, testing it on
+    batches of very similar pictures will inevitably yield bad scores.
+
     Args:
         concept2clip: trained clip adapter model to be tested
-        concept_loader: Dataloader of precomputed concept spaces
-        clip_loader: Dataloader of precomputed CLIP embeddings
+        loader: TensorDataset DataLoader of precomputed concept spaces and CLIP embeddings
         device: the device to use for the testing
         verbose: whether to print the progress bar (default: True)
 
@@ -40,17 +43,15 @@ def test_concept2clip(
     """
 
     concept2clip.eval()
-    batch_size = concept_loader.batch_size
+    batch_size = loader.batch_size
 
-    assert (concept_loader.batch_size == clip_loader.batch_size) and (batch_size is not None)
+    assert batch_size is not None
 
     with torch.no_grad():
         loss = 0
         matching_accuracy = 0
 
-        for concepts, embeddings in tqdm(
-            zip(concept_loader, clip_loader), desc="Test batches", disable=not verbose
-        ):
+        for concepts, embeddings in tqdm(loader, desc="Test batches", disable=not verbose):
             # Move batch to device
             concepts, embeddings = concepts.to(device), embeddings.to(device)
 
@@ -58,10 +59,11 @@ def test_concept2clip(
 
             # Update metrics
             loss += F.mse_loss(output, embeddings).item() / batch_size
-            matching_accuracy += cosine_matching(output, embeddings) / batch_size
+            # No need to divide by batch size, cosine matching is already normalized
+            matching_accuracy += cosine_matching(output, embeddings)
 
-    loss /= len(concept_loader)
-    matching_accuracy /= len(concept_loader)
+    loss /= len(loader)
+    matching_accuracy /= len(loader)
 
     return loss, matching_accuracy
 

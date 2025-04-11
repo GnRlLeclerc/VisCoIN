@@ -7,10 +7,22 @@ into the Kaggle cache path with username "viscoin".
 
 import os
 import zipfile
+from typing import Literal
 
 import kagglehub
 import requests
+from torch.utils.data import Dataset
+from torchvision.transforms import (
+    Compose as ComposeV1,  # for the CLIP model that uses legacy compose
+)
+from torchvision.transforms.v2 import Compose as ComposeV2
 from tqdm import tqdm
+
+from viscoin.datasets.transforms import RESNET_TEST_TRANSFORM, RESNET_TRAIN_TRANSFORM
+
+Compose = ComposeV1 | ComposeV2
+
+DatasetType = Literal["cub", "funnybirds"]
 
 
 def download(url: str):
@@ -56,3 +68,66 @@ def dataset_path(name: str) -> str:
     kaggle_cache = kagglehub.config.DEFAULT_CACHE_FOLDER  # type: ignore
 
     return os.path.join(kaggle_cache, "datasets", "viscoin", name)
+
+
+def _get_transform(
+    default: Compose, train: Compose, test: Compose, mode: Literal["train", "test"] | Compose | None
+) -> Compose:
+    """Auxiliary function to load the correct image transformation pipeline"""
+
+    match mode:
+        case None:
+            return default
+        case "train":
+            return train
+        case "test":
+            return test
+        case _:
+            return mode
+
+
+def get_datasets(
+    name: DatasetType, transform: Literal["train", "test"] | Compose | None = None
+) -> tuple[Dataset, Dataset]:
+    """Load the train and test datasets for the given dataset name.
+
+    Reminder:
+    - train transforms usually apply random cropping, resizing, etc
+    - test transforms usually apply resizing and normalization
+
+    When doing fine-tuning of additional models (such as concept2clip), use "test" for both datasets
+    in order to match the CLIP model's test transforms.
+
+    Args:
+        name: dataset variant
+        transform: the transform to apply to all images
+            - None: applies the default train/test transform to the train/test datasets
+            - "train": applies the train transform to both datasets
+            - "test": applies the test transform to both datasets
+            - Compose: applies the given transform to both datasets
+    """
+
+    train_tf = _get_transform(
+        RESNET_TRAIN_TRANSFORM, RESNET_TRAIN_TRANSFORM, RESNET_TEST_TRANSFORM, transform
+    )
+    test_tf = _get_transform(
+        RESNET_TEST_TRANSFORM, RESNET_TRAIN_TRANSFORM, RESNET_TEST_TRANSFORM, transform
+    )
+
+    match name:
+        case "cub":
+            from viscoin.datasets.cub import CUB_200_2011
+
+            train = CUB_200_2011("train", transform=train_tf)
+            test = CUB_200_2011("test", transform=test_tf)
+
+        case "funnybirds":
+            from viscoin.datasets.funnybirds import FunnyBirds
+
+            train = FunnyBirds("train", transform=train_tf)
+            test = FunnyBirds("test", transform=test_tf)
+
+        case _:
+            raise ValueError(f"Unknown dataset: {name}")
+
+    return train, test

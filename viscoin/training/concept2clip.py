@@ -1,4 +1,5 @@
 import json
+import os
 from dataclasses import dataclass
 from typing import Literal
 
@@ -7,12 +8,12 @@ from torch import Tensor, nn, optim
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
+from viscoin.datasets.utils import DatasetType, get_datasets
 from viscoin.models.classifiers import Classifier
 from viscoin.models.clip import CLIP
 from viscoin.models.concept2clip import Concept2CLIP
 from viscoin.models.concept_extractors import ConceptExtractor
 from viscoin.testing.concept2clip import test_concept2clip
-from viscoin.training.losses import InfoNCE
 from viscoin.utils.logging import get_logger
 
 
@@ -20,7 +21,8 @@ from viscoin.utils.logging import get_logger
 class Concept2ClipTrainingParams:
     epochs: int = 30
     learning_rate: float = 1e-5
-    criterion: nn.Module = InfoNCE()
+    batch_size: int = 32
+    criterion: nn.Module = nn.MSELoss()
 
 
 def train_concept2clip(
@@ -28,9 +30,7 @@ def train_concept2clip(
     concept_extractor: ConceptExtractor,
     concept2clip: Concept2CLIP,
     clip_model: CLIP,
-    dataset_type: str,
-    train_loader: DataLoader,
-    test_loader: DataLoader,
+    dataset: DatasetType,
     device: str,
     params: Concept2ClipTrainingParams,
 ):
@@ -48,23 +48,20 @@ def train_concept2clip(
         params: training parameters
     """
 
+    batch_size = params.batch_size
+
     ###############################################################################################
     #                                   PRECOMPUTE CONCEPT SPACES                                 #
     ###############################################################################################
 
-    batch_size = train_loader.batch_size
-    assert (train_loader.batch_size == test_loader.batch_size) and (batch_size is not None)
-
     train_concept_spaces, test_concept_spaces = _compute_concept_spaces(
         classifier,
         concept_extractor,
-        dataset_type,
-        train_loader,
-        test_loader,
+        dataset,
         device,
+        batch_size,
     )
 
-    del train_loader, test_loader  # free memory
     del classifier, concept_extractor  # free GPU memory
     torch.cuda.empty_cache()
 
@@ -72,7 +69,7 @@ def train_concept2clip(
     #                                  PRECOMPUTE CLIP EMBEDDINGS                                 #
     ###############################################################################################
 
-    train_embeddings, test_embeddings = clip_model.compute_embeddings(dataset_type)  # type: ignore
+    train_embeddings, test_embeddings = clip_model.compute_embeddings(dataset)
     del clip_model  # free GPU memory
     torch.cuda.empty_cache()
 
@@ -81,10 +78,13 @@ def train_concept2clip(
     ###############################################################################################
 
     # Create dataloaders from the precomputed concept spaces and clip embeddings
-    train_concept_loader = DataLoader(TensorDataset(train_concept_spaces), batch_size)
-    train_clip_loader = DataLoader(TensorDataset(train_embeddings), batch_size)
-    test_concept_loader = DataLoader(TensorDataset(test_concept_spaces), batch_size)
-    test_clip_loader = DataLoader(TensorDataset(test_embeddings), batch_size)
+    train_loader = DataLoader(
+        TensorDataset(train_concept_spaces, train_embeddings), batch_size, shuffle=True
+    )
+    # NOTE: the test dataloader is shuffled to avoid testing contrastive batches of birds of the same class
+    test_loader = DataLoader(
+        TensorDataset(test_concept_spaces, test_embeddings), batch_size, shuffle=True
+    )
 
     best_loss = float("inf")
     best_model = concept2clip.state_dict()
@@ -102,7 +102,7 @@ def train_concept2clip(
         # Training metrics for this epoch
         train_loss = 0
 
-        for concepts, embeddings in zip(train_concept_loader, train_clip_loader):
+        for concepts, embeddings in train_loader:
             # Move batch to device
             concepts, embeddings = concepts.to(device), embeddings.to(device)
 
@@ -119,7 +119,7 @@ def train_concept2clip(
             train_loss += loss.item() / batch_size
 
         # Compute the mean loss for this epoch
-        train_loss /= len(train_concept_loader)
+        train_loss /= len(train_loader)
 
         ###########################################################################################
         #                                       TESTING STEP                                      #
@@ -127,8 +127,7 @@ def train_concept2clip(
 
         test_loss, matching_accuracy = test_concept2clip(
             concept2clip,
-            test_concept_loader,
-            test_clip_loader,
+            test_loader,
             device,
             False,
         )
@@ -166,10 +165,9 @@ def _cache(mode: Literal["train", "test"], dataset: str) -> str:
 def _compute_concept_spaces(
     classifier: Classifier,
     concept_extractor: ConceptExtractor,
-    dataset: str,
-    train_loader: DataLoader,
-    test_loader: DataLoader,
+    dataset: DatasetType,
     device: str,
+    batch_size,
 ) -> tuple[Tensor, Tensor]:
     """Precompute the concept spaces for the whole training and testing image sets.
 
@@ -177,8 +175,6 @@ def _compute_concept_spaces(
         classifier: viscoin classifier
         concept_extractor: viscoin concept extractor
         dataset: name of the dataset (for cache path)
-        train_loader: DataLoader containing the training dataset
-        test_loader: DataLoader containing the testing dataset
         device: device to use for training
 
     The results are cached under checkpoints/concepts/
@@ -195,12 +191,14 @@ def _compute_concept_spaces(
     except FileNotFoundError:
         pass
 
+    # Use both datasets in test transform mode, no shuffling
+    train, test = get_datasets(dataset, transform="test")
+    train_loader = DataLoader(train, batch_size)
+    test_loader = DataLoader(test, batch_size)
+
     n_concepts = concept_extractor.n_concepts
     len_train = len(train_loader.dataset)  # type: ignore
     len_test = len(test_loader.dataset)  # type: ignore
-    batch_size = train_loader.batch_size
-
-    assert (train_loader.batch_size == test_loader.batch_size) and (batch_size is not None)
 
     train_concept_spaces = torch.zeros((len_train, n_concepts, 3, 3))  # type: ignore
     test_concept_spaces = torch.zeros((len_test, n_concepts, 3, 3))  # type: ignore
@@ -220,6 +218,7 @@ def _compute_concept_spaces(
         concept_space, _ = concept_extractor.forward(hidden[-3:])
         test_concept_spaces[i * batch_size : (i + 1) * batch_size] = concept_space.detach().cpu()
 
+    os.makedirs("checkpoints/concepts", exist_ok=True)
     torch.save(train_concept_spaces, _cache("train", dataset))
     torch.save(test_concept_spaces, _cache("test", dataset))
 
