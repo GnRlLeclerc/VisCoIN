@@ -6,15 +6,22 @@ from typing import Literal
 import clip
 import torch
 from torch import Tensor, nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
 from viscoin.datasets.utils import get_datasets
 
 
-def _cache(mode: Literal["train", "test"], dataset: str, model: str) -> str:
+def _img_cache(mode: Literal["train", "test"], dataset: str, model: str) -> str:
+    """Returns the path to a cached file for CLIP image embeddings of a specific dataset"""
     model = model.replace("/", "-")
-    return f"checkpoints/clip/{model}_{dataset}_{mode}.pt"
+    return f"checkpoints/clip/{model}_{dataset}_img_{mode}.pt"
+
+
+def _txt_cache(key: str, dataset: str, model: str) -> str:
+    """Returns the path to a cached file for CLIP text embeddings of a set of labels / captions"""
+    model = model.replace("/", "-")
+    return f"checkpoints/clip/{model}_{dataset}_txt_{key}.pt"
 
 
 class CLIP(nn.Module):
@@ -55,8 +62,10 @@ class CLIP(nn.Module):
         """
 
         try:
-            train_embeddings = torch.load(_cache("train", dataset, self.kind), weights_only=True)
-            test_embeddings = torch.load(_cache("test", dataset, self.kind), weights_only=True)
+            train_embeddings = torch.load(
+                _img_cache("train", dataset, self.kind), weights_only=True
+            )
+            test_embeddings = torch.load(_img_cache("test", dataset, self.kind), weights_only=True)
             return train_embeddings, test_embeddings
         except FileNotFoundError:
             pass
@@ -92,7 +101,58 @@ class CLIP(nn.Module):
 
         # Save the embeddings to cache
         os.makedirs("checkpoints/clip", exist_ok=True)
-        torch.save(train_embeddings, _cache("train", dataset, self.kind))
-        torch.save(test_embeddings, _cache("test", dataset, self.kind))
+        torch.save(train_embeddings, _img_cache("train", dataset, self.kind))
+        torch.save(test_embeddings, _img_cache("test", dataset, self.kind))
 
         return train_embeddings, test_embeddings
+
+    def compute_text_embeddings(
+        self, captions: list[str], dataset: Literal["cub", "funnybirds"], cache_key: str
+    ) -> Tensor:
+        """Compute CLIP embeddings of the given captions / sentences.
+
+        The captions are inserted into the template "a photo of a <text>" before encoding.
+
+        The results are cached under checkpoints/clip/
+
+        Args:
+            captions: list of captions to encode
+            dataset: dataset which those captions are for
+            cache_key: key to use for caching the results
+
+        Returns:
+            text_embeddings: CLIP embeddings for the captions (on CPU)
+        """
+
+        try:
+            return torch.load(_txt_cache(cache_key, dataset, self.kind), weights_only=True)
+        except FileNotFoundError:
+            pass
+
+        batch_size = 32
+
+        text = clip.tokenize(captions)
+        token_dataset = TensorDataset(text)
+        dataloader = DataLoader(token_dataset, batch_size)
+
+        embeddings = torch.zeros((len(captions), self.embedding_size))
+
+        self.model.eval()
+
+        for i, batch in enumerate(
+            tqdm(
+                dataloader,
+                desc=f"Computing caption CLIP embeddings for {dataset} - {cache_key}",
+            )
+        ):
+            with torch.no_grad():
+                batch = batch[0].to(self.device)
+                embeddings[i * batch_size : (i + 1) * batch_size] = (
+                    self.encode_text(batch).detach().cpu()
+                )
+
+        # Save the embeddings to cache
+        os.makedirs("checkpoints/clip", exist_ok=True)
+        torch.save(embeddings, _txt_cache(cache_key, dataset, self.kind))
+
+        return embeddings

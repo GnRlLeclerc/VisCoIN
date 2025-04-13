@@ -4,6 +4,8 @@ These captions were generated using CUB annotations as a base,
 in the spirit of PEEB https://arxiv.org/abs/2403.05297 (captions = parts + variations)
 """
 
+import os
+
 parts = [
     "back",
     "beak",
@@ -122,6 +124,14 @@ def generate() -> list[str]:
     return captions
 
 
+def load() -> list[str]:
+    """Load the generated captions from disk."""
+    filepath = os.path.join("viscoin", "captions", "cub.txt")
+    with open(filepath, "r") as f:
+        captions = f.readlines()
+    return [c.strip() for c in captions]
+
+
 if __name__ == "__main__":
     """Generate captions for the CUB dataset.
 
@@ -132,7 +142,6 @@ if __name__ == "__main__":
     captions = generate()
 
     print("Generated", len(captions), "captions")
-    import os
 
     filepath = os.path.join("viscoin", "captions", "cub.txt")
 
