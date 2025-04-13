@@ -40,7 +40,9 @@ class CLIP(nn.Module):
     def encode_text(self, x: Tensor) -> Tensor:
         return self.model.encode_text(x)
 
-    def compute_embeddings(self, dataset: Literal["cub", "funnybirds"]) -> tuple[Tensor, Tensor]:
+    def compute_image_embeddings(
+        self, dataset: Literal["cub", "funnybirds"]
+    ) -> tuple[Tensor, Tensor]:
         """Compute CLIP embeddings on the given datasets.
         We define this helper because CLIP needs its own transforms,
         that may not align with the transforms VisCoIN is using for the given dataset.

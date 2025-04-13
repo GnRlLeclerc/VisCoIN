@@ -19,6 +19,10 @@ from viscoin.utils.logging import get_logger
 
 @dataclass
 class Concept2ClipTrainingParams:
+    """Training parameters for the concept2clip model.
+
+    The default parameters were observed to be the best for training on CUB-200-2011."""
+
     epochs: int = 30
     learning_rate: float = 1e-5
     batch_size: int = 32
@@ -69,7 +73,7 @@ def train_concept2clip(
     #                                  PRECOMPUTE CLIP EMBEDDINGS                                 #
     ###############################################################################################
 
-    train_embeddings, test_embeddings = clip_model.compute_embeddings(dataset)
+    train_embeddings, test_embeddings = clip_model.compute_image_embeddings(dataset)
     del clip_model  # free GPU memory
     torch.cuda.empty_cache()
 

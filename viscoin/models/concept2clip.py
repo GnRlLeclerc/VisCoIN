@@ -9,7 +9,7 @@ from torch import Tensor
 class Concept2CLIP(nn.Module):
     """Basic adapter model with two linear layers"""
 
-    def __init__(self, n_concepts: int, clip_dim: int, hidden_dim=1024):
+    def __init__(self, n_concepts: int, clip_dim: int):
         """
         Args:
             n_concepts: amount of viscoin concepts
@@ -17,6 +17,8 @@ class Concept2CLIP(nn.Module):
             hidden_dim: dimension of the hidden layer
         """
         super().__init__()
+
+        hidden_dim = (n_concepts * 3 * 3 + clip_dim) // 2
 
         self.model = nn.Sequential(
             nn.Linear(n_concepts * 3 * 3, hidden_dim),
