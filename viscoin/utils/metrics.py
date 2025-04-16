@@ -13,6 +13,9 @@ def cosine_matching(original: Tensor, rebuilt: Tensor) -> float:
     Args:
         original (n, embed_size): The original embeddings
         rebuilt (n, embed_size): The rebuilt embeddings
+
+    Returns:
+        match ratio in [0, 1]
     """
 
     assert original.shape == rebuilt.shape, "Tensors must have the same shape"

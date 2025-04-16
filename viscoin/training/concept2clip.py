@@ -1,66 +1,102 @@
+import os
 from dataclasses import dataclass
+from typing import Literal
 
 import torch
-import torchvision.transforms
-from clip.model import CLIP
-from torch import nn, optim
-from torch.utils.data import DataLoader
+import torch.nn.functional as F
+from torch import Tensor, optim
+from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
+from viscoin.datasets.utils import DatasetType, get_dataloaders
 from viscoin.models.classifiers import Classifier
+from viscoin.models.clip import CLIP
 from viscoin.models.concept2clip import Concept2CLIP
 from viscoin.models.concept_extractors import ConceptExtractor
-from viscoin.models.gan import GeneratorAdapted
-from viscoin.testing.concept2clip import test_adapter
-from viscoin.training.losses import InfoNCE
+from viscoin.testing.concept2clip import test_concept2clip
+from viscoin.utils.dataclasses import IgnoreNone
 from viscoin.utils.logging import get_logger
 
 
 @dataclass
-class ClipAdapterTrainingParams:
+class Concept2ClipTrainingParams(IgnoreNone):
+    """Training parameters for the concept2clip model.
+
+    The default parameters were observed to be the best for training on CUB-200-2011."""
+
     epochs: int = 30
     learning_rate: float = 1e-5
-
-    train_criterion = nn.MSELoss()
-    test_criterion = nn.MSELoss()
+    batch_size: int = 32
 
 
 def train_concept2clip(
-    concept2clip: Concept2CLIP,
-    concept_extractor: ConceptExtractor,
     classifier: Classifier,
-    viscoin_gan: GeneratorAdapted,
+    concept_extractor: ConceptExtractor,
+    concept2clip: Concept2CLIP,
     clip_model: CLIP,
-    train_loader: DataLoader,
-    test_loader: DataLoader,
+    dataset: DatasetType,
     device: str,
-    params: ClipAdapterTrainingParams,
+    params: Concept2ClipTrainingParams,
 ):
-    """Train the adapter to convert concept embeddings to clip embeddings.
-
-    Note: the losses are averaged over batches.
+    """Train the concept2clip model to rebuild CLIP embeddings from concept spaces.
 
     Args:
-        model: the classifier model to train
-        clip_model: the loaded CLIP model
-        train_loader: the DataLoader containing the training dataset
-        test_loader: the DataLoader containing the testing dataset
-        device: the device to use for training
-        epochs: the number of epochs to train the model
-        learning_rate: the learning rate for the optimizer
+        classifier: viscoin classifier
+        concept_extractor: viscoin concept extractor
+        concept2clip: concept2clip model to train
+        clip_model: CLIP model
+        dataset_type: name of the dataset (for CLIP)
+        train_loader: DataLoader containing the training dataset
+        test_loader: DataLoader containing the testing dataset
+        device: device to use for training
+        params: training parameters
     """
+
+    batch_size = params.batch_size
+
+    ###############################################################################################
+    #                                   PRECOMPUTE CONCEPT SPACES                                 #
+    ###############################################################################################
+
+    train_concept_spaces, test_concept_spaces = _compute_concept_spaces(
+        classifier,
+        concept_extractor,
+        dataset,
+        device,
+        batch_size,
+    )
+
+    del classifier, concept_extractor  # free GPU memory
+    torch.cuda.empty_cache()
+
+    ###############################################################################################
+    #                                  PRECOMPUTE CLIP EMBEDDINGS                                 #
+    ###############################################################################################
+
+    train_embeddings, test_embeddings = clip_model.compute_image_embeddings(dataset)
+    del clip_model  # free GPU memory
+    torch.cuda.empty_cache()
+
+    ###############################################################################################
+    #                                 ACTUAL CONCEPT2CLIP TRAINING                                #
+    ###############################################################################################
+
+    # Create dataloaders from the precomputed concept spaces and clip embeddings
+    train_loader = DataLoader(
+        TensorDataset(train_concept_spaces, train_embeddings), batch_size, shuffle=True
+    )
+    # NOTE: the test dataloader is shuffled to avoid testing contrastive batches of birds of the same class
+    test_loader = DataLoader(
+        TensorDataset(test_concept_spaces, test_embeddings), batch_size, shuffle=True
+    )
+
     best_loss = float("inf")
     best_model = concept2clip.state_dict()
     logger = get_logger()
 
-    # Optimizer and scheduler
     optimizer = optim.Adam(concept2clip.parameters(), lr=params.learning_rate)
 
-    resizer = torchvision.transforms.Resize((224, 224))
-
-    contrastive_criterion = InfoNCE()
-
-    for epoch in (progress := tqdm(range(1, params.epochs + 1), "Training epochs")):
+    for _ in (progress := tqdm(range(1, params.epochs + 1), "Training Concept2CLIP")):
         ###########################################################################################
         #                                      TRAINING STEP                                      #
         ###########################################################################################
@@ -68,89 +104,55 @@ def train_concept2clip(
         concept2clip.train()
 
         # Training metrics for this epoch
-        total_loss = 0
-        total_samples = 0
+        train_loss = 0
 
-        for inputs, _ in train_loader:
+        for concepts, embeddings in train_loader:
             # Move batch to device
-            inputs = inputs.to(device)
-
-            # Compute real clip embeddings
-            clip_embeddings = clip_model.encode_image(inputs).float()
-
-            # Predicted clip embeddings
-            _, hidden = classifier.forward(inputs)
-            concept_space, extra_info = concept_extractor.forward(hidden[-3:])
-
-            # Compute the reconstructed images and their clip embeddings
-            rebuilt_images, _ = viscoin_gan.forward(
-                z1=concept_space, z2=extra_info, return_latents=True
-            )
-
-            # Resize images to 224x224 to match CLIP input size
-            rebuilt_images = resizer(rebuilt_images)
-
-            rebuilt_images_clip_embeddings = clip_model.encode_image(rebuilt_images).float()
+            concepts, embeddings = concepts.to(device), embeddings.to(device)
 
             # Generate clip embeddings from concept embeddings
-            output = concept2clip(concept_space.view(-1, concept_extractor.n_concepts * 9))
+            output = concept2clip(concepts)
 
+            # Optimize the model
             optimizer.zero_grad()
-
-            # Computing the loss between the predicted clip embeddings and the real clip embeddings and the contrastive loss
-            embedding_loss = params.train_criterion(
-                output, clip_embeddings
-            ) + params.train_criterion(output, rebuilt_images_clip_embeddings)
-
-            contrastive_loss = contrastive_criterion(output, clip_embeddings)
-
-            loss = embedding_loss + contrastive_loss
-
-            current_loss = loss.item()
-
-            # Compute loss and backpropagate
+            loss = F.mse_loss(output, embeddings)
             loss.backward()
-
             optimizer.step()
 
-            # Update training metrics
-            total_loss += current_loss
-            total_samples += inputs.size(0)
+            # Accumulate loss for metrics
+            train_loss += loss.item() / batch_size
 
-            progress.set_description_str(
-                f"Training epochs {total_samples}/{len(train_loader.dataset)}"  # type: ignore
-            )
-
-        # Append training metrics
-        batch_mean_loss = total_loss / len(train_loader)
+        # Compute the mean loss for this epoch
+        train_loss /= len(train_loader)
 
         ###########################################################################################
         #                                       TESTING STEP                                      #
         ###########################################################################################
 
-        mean_loss, matching_accuracy = test_adapter(
+        test_loss, matching_accuracy = test_concept2clip(
             concept2clip,
-            classifier,
-            concept_extractor,
-            clip_model,
             test_loader,
             device,
-            params.test_criterion,  # type: ignore
             False,
         )
 
-        if mean_loss < best_loss:  # type: ignore
+        # Save the model state_dict if it performs best
+        if test_loss < best_loss:  # type: ignore
             best_model = concept2clip.state_dict()
-            best_loss = mean_loss
+            best_loss = test_loss
 
-        # Log the current state of training
-        logger.info(
-            f"Epoch {epoch}/{params.epochs} - Train Loss: {batch_mean_loss:.4f} - Test Loss: {mean_loss:.4f} - Matching Accuracy: {matching_accuracy:.4f}"
-        )
+        data = {
+            "train_loss": train_loss,
+            "test_loss": test_loss,
+            "matching_accuracy": matching_accuracy,
+        }
+
+        # Log the current state of training in jsonl format for easy plotting
+        logger.info(data)
 
         progress.set_postfix(
-            train_loss=batch_mean_loss,
-            test_loss=mean_loss,
+            train_loss=train_loss,
+            test_loss=test_loss,
             best_loss=best_loss,
             matching_accuracy=matching_accuracy,
         )
@@ -160,28 +162,66 @@ def train_concept2clip(
     concept2clip.load_state_dict(best_model)
 
 
-def get_average_clip_embedding(loader: DataLoader, clip_model: CLIP, device: str) -> torch.Tensor:
-    """Compute the average clip embedding of a dataset
+def _cache(mode: Literal["train", "test"], dataset: str) -> str:
+    return f"checkpoints/concepts/{dataset}_{mode}.pt"
+
+
+def _compute_concept_spaces(
+    classifier: Classifier,
+    concept_extractor: ConceptExtractor,
+    dataset: DatasetType,
+    device: str,
+    batch_size,
+) -> tuple[Tensor, Tensor]:
+    """Precompute the concept spaces for the whole training and testing image sets.
 
     Args:
-        loader: the DataLoader containing the dataset
-        clip_model: the loaded CLIP model
-        device
+        classifier: viscoin classifier
+        concept_extractor: viscoin concept extractor
+        dataset: name of the dataset (for cache path)
+        device: device to use for training
+
+    The results are cached under checkpoints/concepts/
+
+    Returns:
+        train_concept_spaces: concept spaces for the training set (on CPU)
+        test_concept_spaces: concept spaces for the testing set (on CPU)
     """
-    clip_model.eval()
 
-    with torch.no_grad():
-        total_clip_embeddings = torch.zeros(512).to(device)
-        total_samples = 0
+    try:
+        train_embeddings = torch.load(_cache("train", dataset), weights_only=True)
+        test_embeddings = torch.load(_cache("test", dataset), weights_only=True)
+        return train_embeddings, test_embeddings
+    except FileNotFoundError:
+        pass
 
-        for inputs, _ in tqdm(loader, desc="Computing average clip embedding"):
-            # Move batch to device
-            inputs = inputs.to(device)
+    # Use both datasets in test transform mode, no shuffling
+    train, test = get_dataloaders(dataset, batch_size, "test")
 
-            # Compute real clip embeddings
-            clip_embeddings = clip_model.encode_image(inputs).float()
+    n_concepts = concept_extractor.n_concepts
+    len_train = len(train_loader.dataset)  # type: ignore
+    len_test = len(test_loader.dataset)  # type: ignore
 
-            total_clip_embeddings += clip_embeddings.sum(dim=0)
-            total_samples += inputs.size(0)
+    train_concept_spaces = torch.zeros((len_train, n_concepts, 3, 3))  # type: ignore
+    test_concept_spaces = torch.zeros((len_test, n_concepts, 3, 3))  # type: ignore
 
-    return total_clip_embeddings / total_samples
+    classifier.eval()
+    concept_extractor.eval()
+
+    for i, (inputs, _) in enumerate(tqdm(train, desc="Precomputing training embeddings")):
+        inputs = inputs.to(device)
+        _, hidden = classifier.forward(inputs)
+        concept_space, _ = concept_extractor.forward(hidden[-3:])
+        train_concept_spaces[i * batch_size : (i + 1) * batch_size] = concept_space.detach().cpu()
+
+    for i, (inputs, _) in enumerate(tqdm(test, desc="Precomputing testing embeddings")):
+        inputs = inputs.to(device)
+        _, hidden = classifier.forward(inputs)
+        concept_space, _ = concept_extractor.forward(hidden[-3:])
+        test_concept_spaces[i * batch_size : (i + 1) * batch_size] = concept_space.detach().cpu()
+
+    os.makedirs("checkpoints/concepts", exist_ok=True)
+    torch.save(train_concept_spaces, _cache("train", dataset))
+    torch.save(test_concept_spaces, _cache("test", dataset))
+
+    return train_concept_spaces, test_concept_spaces

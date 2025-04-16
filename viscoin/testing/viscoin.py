@@ -176,13 +176,24 @@ class TopKSelection(TypedDict):
     k: int  # Default: 3
 
 
+class IndicesSelection(TypedDict):
+    """Select the concepts by their indices"""
+
+    method: Literal["indices"]
+    indices: list[int]  # Default: [0, 1, 2]
+
+
+Selection = ThresholdSelection | TopKSelection | IndicesSelection
+
+
 def amplify_concepts(
     image: Tensor,
     classifier: Classifier,
     concept_extractor: ConceptExtractor,
     explainer: Explainer,
     generator: GeneratorAdapted,
-    concept_selection: ThresholdSelection | TopKSelection,
+    concept_selection: Selection,
+    multipliers: list[float],
     device: str,
 ) -> AmplifiedConceptsResults:
     """
@@ -195,8 +206,8 @@ def amplify_concepts(
         concept_extractor: The concept extractor model.
         explainer: The explainer model.
         generator: The VisCoIN GAN model.
+        multipliers: The multipliers to use for amplification.
         device: The device to use.
-        threshold: [-1, 1] - The threshold to select the best concepts.
 
     Returns: AmplifiedConceptsResults, a dataclass containing the results.
     """
@@ -206,7 +217,6 @@ def amplify_concepts(
     explainer = explainer.eval()
     generator = generator.eval()
 
-    multipliers = [0.0, 1.0, 2.0, 4.0]
     results = AmplifiedConceptsResults(
         image=image.clone(),
         default_probas=torch.tensor([]),
@@ -295,14 +305,14 @@ def amplify_concepts(
     return results
 
 
-def amplify_single_concepts(
+def amplify_specific_concepts(
     image: Tensor,
     generator: GeneratorAdapted,
     classifier: Classifier,
     concept_extractor: ConceptExtractor,
-    concept_index: int,
+    concept_indices: list[int],
     multipliers: list[float],
-):
+) -> list[Tensor]:
 
     _, classifier_latents = classifier.forward(image.unsqueeze(0))
     concept_embeddings, extra_info = concept_extractor.forward(classifier_latents[-3:])
@@ -311,7 +321,8 @@ def amplify_single_concepts(
     for multiplier in multipliers:
 
         embeddings = concept_embeddings.clone()
-        embeddings[0, concept_index] *= multiplier
+        for idx in concept_indices:
+            embeddings[0, idx] *= multiplier
 
         with torch.no_grad():
             new_image = generator(z1=embeddings, z2=extra_info, noise_mode="const")
@@ -351,24 +362,32 @@ def plot_amplified_images_batch(
     """Plot amplified images in a row, with their corresponding multiplier in the title.
     This function can plot multiple rows."""
 
-    np_images = [[from_torch(image) for image in images[i]] for i in range(len(images))]
-    np_original = [from_torch(original) for original in originals]
+    np_images = [[from_torch(image) for image in row] for row in images]
+    np_originals = [from_torch(original) for original in originals]
 
-    fig, axs = plt.subplots(len(images), len(multipliers) + 1, figsize=(15, 5 * len(images)))
+    num_rows = len(images)
+    num_cols = len(multipliers) + 1
+
+    fig, axs = plt.subplots(num_rows, num_cols, figsize=(15, 5 * num_rows))
     fig.suptitle("Amplification of best concepts for an image")
 
-    for i, (original, row_images) in enumerate(zip(np_original, np_images)):
-        axs[i, 0].imshow(original)
-        axs[i, 0].set_title("Original")
-        axs[i, 0].axis("off")
+    # Flatten and reshape to consistently use 2D indexing [i, j]
+    axs = np.array(axs)
+    if axs.ndim == 1:
+        axs = axs[np.newaxis, :]  # convert to shape (1, num_cols)
 
+    for i, (original, row_images) in enumerate(zip(np_originals, np_images)):
+        axs[i, 0].imshow(original)
+        axs[i, 0].axis("off")
         if labels is not None:
             axs[i, 0].set_title(f"Predicted Label : {labels[i]}\nOriginal")
+        elif i == 0:
+            axs[i, 0].set_title("Original")
 
         for j, (image, multiplier) in enumerate(zip(row_images, multipliers)):
             axs[i, j + 1].imshow(image)
-            if i == 0:  # Only display the header multiplier for the first row
-                axs[i, j + 1].set_title(f"Multiplier: {multiplier:.2f}")
             axs[i, j + 1].axis("off")
+            if i == 0:
+                axs[i, j + 1].set_title(f"Multiplier: {multiplier:.2f}")
 
     plt.show()
