@@ -1,24 +1,25 @@
-import json
 import os
 from dataclasses import dataclass
 from typing import Literal
 
 import torch
-from torch import Tensor, nn, optim
+import torch.nn.functional as F
+from torch import Tensor, optim
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
-from viscoin.datasets.utils import DatasetType, get_datasets
+from viscoin.datasets.utils import DatasetType, get_dataloaders
 from viscoin.models.classifiers import Classifier
 from viscoin.models.clip import CLIP
 from viscoin.models.concept2clip import Concept2CLIP
 from viscoin.models.concept_extractors import ConceptExtractor
 from viscoin.testing.concept2clip import test_concept2clip
+from viscoin.utils.dataclasses import IgnoreNone
 from viscoin.utils.logging import get_logger
 
 
 @dataclass
-class Concept2ClipTrainingParams:
+class Concept2ClipTrainingParams(IgnoreNone):
     """Training parameters for the concept2clip model.
 
     The default parameters were observed to be the best for training on CUB-200-2011."""
@@ -26,7 +27,6 @@ class Concept2ClipTrainingParams:
     epochs: int = 30
     learning_rate: float = 1e-5
     batch_size: int = 32
-    criterion: nn.Module = nn.MSELoss()
 
 
 def train_concept2clip(
@@ -115,7 +115,7 @@ def train_concept2clip(
 
             # Optimize the model
             optimizer.zero_grad()
-            loss = params.criterion(output, embeddings)
+            loss = F.mse_loss(output, embeddings)
             loss.backward()
             optimizer.step()
 
@@ -148,7 +148,7 @@ def train_concept2clip(
         }
 
         # Log the current state of training in jsonl format for easy plotting
-        logger.info(json.dumps(data))
+        logger.info(data)
 
         progress.set_postfix(
             train_loss=train_loss,
@@ -196,9 +196,7 @@ def _compute_concept_spaces(
         pass
 
     # Use both datasets in test transform mode, no shuffling
-    train, test = get_datasets(dataset, transform="test")
-    train_loader = DataLoader(train, batch_size)
-    test_loader = DataLoader(test, batch_size)
+    train, test = get_dataloaders(dataset, batch_size, "test")
 
     n_concepts = concept_extractor.n_concepts
     len_train = len(train_loader.dataset)  # type: ignore
@@ -210,13 +208,13 @@ def _compute_concept_spaces(
     classifier.eval()
     concept_extractor.eval()
 
-    for i, (inputs, _) in enumerate(tqdm(train_loader, desc="Precomputing training embeddings")):
+    for i, (inputs, _) in enumerate(tqdm(train, desc="Precomputing training embeddings")):
         inputs = inputs.to(device)
         _, hidden = classifier.forward(inputs)
         concept_space, _ = concept_extractor.forward(hidden[-3:])
         train_concept_spaces[i * batch_size : (i + 1) * batch_size] = concept_space.detach().cpu()
 
-    for i, (inputs, _) in enumerate(tqdm(test_loader, desc="Precomputing testing embeddings")):
+    for i, (inputs, _) in enumerate(tqdm(test, desc="Precomputing testing embeddings")):
         inputs = inputs.to(device)
         _, hidden = classifier.forward(inputs)
         concept_space, _ = concept_extractor.forward(hidden[-3:])

@@ -5,6 +5,7 @@ in the spirit of PEEB https://arxiv.org/abs/2403.05297 (captions = parts + varia
 """
 
 import os
+from typing import Literal
 
 parts = [
     "back",
@@ -124,12 +125,25 @@ def generate() -> list[str]:
     return captions
 
 
-def load() -> list[str]:
-    """Load the generated captions from disk."""
+def load(prefix: Literal["a bird with"] | None = None) -> list[str]:
+    """Load the generated captions from disk.
+
+    A prefix can be inserted to the captions:
+    - when analyzing concepts, use no prefix, e.g. "striped orange back"
+    - when analyzing whole images, use a prefix, e.g. "a bird with striped orange back"
+
+    Args:
+        prefix: The prefix to add to the captions. Defaults to None.
+    """
     filepath = os.path.join("viscoin", "captions", "cub.txt")
     with open(filepath, "r") as f:
         captions = f.readlines()
-    return [c.strip() for c in captions]
+
+    for i, caption in enumerate(captions):
+        caption = caption.strip()
+        captions[i] = f"{prefix} {caption.strip()}" if prefix else caption
+
+    return captions
 
 
 if __name__ == "__main__":

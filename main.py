@@ -11,11 +11,17 @@ Will be subject to many changes as the project evolves.
 
 import click
 
-from viscoin.cli.training import train, test, to_pickle
-
 from viscoin.cli.concept_labels import clip_concept_labels, evalutate_concept_captions
-
-from viscoin.cli.visualization import amplify, amplify_single, concepts, concept_heatmaps, logs
+from viscoin.cli.logs import logs
+from viscoin.cli.test import test
+from viscoin.cli.to_pickle import to_pickle
+from viscoin.cli.train import train
+from viscoin.cli.visualization import (
+    amplify,
+    amplify_single,
+    concept_heatmaps,
+    concepts,
+)
 
 # Imports Trogon if installed : Terminal User Interface for Click commands
 try:
@@ -27,7 +33,7 @@ except ImportError:
 
 
 @tui()
-@click.group()
+@click.group(context_settings={"max_content_width": 1000})
 def main():
     pass
 

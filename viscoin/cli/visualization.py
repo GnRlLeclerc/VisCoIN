@@ -25,7 +25,6 @@ from viscoin.testing.viscoin import (
 )
 from viscoin.utils.gradcam import GradCAM
 from viscoin.utils.images import from_torch, heatmap_to_img, overlay
-from viscoin.utils.types import TestingResults, TrainingResults
 
 
 @click.command()
@@ -138,37 +137,6 @@ def concepts(
     results.plot_class_concept_correlations()
     results.plot_concept_class_correlations()
     results.plot_concept_entropies()
-
-
-@click.command()
-@click.option(
-    "--logs-path",
-    help="The path to the logs file",
-    required=True,
-    type=str,
-)
-def logs(logs_path: str):
-    """Parse a viscoin training log file and plot the losses and metrics"""
-
-    training_results: list[TrainingResults] = []
-    testing_results: list[TestingResults] = []
-
-    # Read the log file
-    with open(logs_path, "r") as f:
-        for line in f:
-            if line.startswith("TestingResults"):
-                testing_results.append(eval(line))
-            elif line.startswith("TrainingResults"):
-                training_results.append(eval(line))
-            else:
-                continue
-
-    # Plot the losses
-    TrainingResults.plot_losses(training_results)
-    TestingResults.plot_losses(testing_results)
-
-    # Plot the metrics
-    TestingResults.plot_preds_overlap(testing_results)
 
 
 @click.command()
@@ -290,7 +258,10 @@ def amplify_single(
     image_indices: str,
     device: str,
 ):
-    """Similar to amplify, but instead of amplifying multiple concepts for a given image, we amplify only a single concept per image."""
+    """Similar to amplify, but instead of amplifying multiple concepts for a given image, we amplify only a single concept per image.
+
+    TODO : quel indice ? Quelle image ?
+    """
     concept_labels: list[str] = []
 
     if concept_indices == "random":

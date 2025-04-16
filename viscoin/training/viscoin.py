@@ -15,6 +15,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from viscoin.models.gan import GeneratorAdapted, fix_path
+from viscoin.utils.dataclasses import IgnoreNone
 from viscoin.utils.types import TrainingResults
 
 fix_path()
@@ -44,7 +45,7 @@ from viscoin.utils.logging import get_logger
 
 
 @dataclass
-class TrainingParameters:
+class VisCoINTrainingParams(IgnoreNone):
     """Training parameters for the VisCoIN ensemble.
     The default are for CUB (see page 25 of the paper).
 
@@ -52,26 +53,31 @@ class TrainingParameters:
         iterations: The number of iterations to train the ensemble.
         learning_rate: The learning rate for the optimizers.
         cd_fid_iteration: The iteration at which we start to compute the concept diversity and fidelity loss.
+        batch_size: The batch size for the training.
         alpha: The output fidelity loss coefficient.
         beta: The LPIPS loss coefficient.
         gamma: The reconstruction classification loss coefficient.
         delta: The sparsity loss coefficient.
         gradient_accumulation: The number of steps to accumulate gradients for.
+        device: The device to use for training.
     """
 
     # Generic params
-    iterations = 100_000
-    learning_rate = 0.0001
-    cd_fid_iteration = 100
+    iterations: int = 100_000
+    learning_rate: float = 0.0001
+    cd_fid_iteration: int = 100
+    batch_size: int = 8
 
     # Loss coefficients
-    alpha = 0.5  # Output fidelity loss
-    beta = 3.0  # LPIPS loss
-    gamma = 0.1  # Reconstruction classification loss
-    delta = 0.2  # Sparsity loss
+    alpha: float = 0.5  # Output fidelity loss
+    beta: float = 3.0  # LPIPS loss
+    gamma: float = 0.1  # Reconstruction classification loss
+    delta: float = 0.2  # Sparsity loss
 
     # Gradient accumulation
-    gradient_accumulation = 1  # Step value of 1: no accumulation
+    gradient_accumulation: int = 1  # Step value of 1: no accumulation
+
+    device = "cuda"
 
 
 def train_viscoin(
@@ -85,8 +91,7 @@ def train_viscoin(
     train_loader: DataLoader,
     test_loader: DataLoader,
     # Training parameters
-    params: TrainingParameters,
-    device: str,
+    params: VisCoINTrainingParams,
 ):
     """Train the VisCoIN ensemble on the CUB or FunnyBirds dataset, using the parameters defined in the paper.
 
@@ -102,6 +107,7 @@ def train_viscoin(
         device: The device to use.
     """
     logger = get_logger()
+    device = params.device
 
     # Model preparations
     classifier.eval()  # Freeze the classifier
@@ -234,7 +240,7 @@ def train_viscoin(
                 inter_loss.item(),
             )
 
-            logger.info(results)
+            data = {f"train_{key}": value for key, value in results.__dict__.items()}
 
             test_results = test_viscoin(
                 classifier,
@@ -246,7 +252,10 @@ def train_viscoin(
                 compute_fid=True,
                 verbose=False,
             )
-            logger.info(test_results)
+
+            # Merge the training and testing results
+            data.update({f"test_{key}": value for key, value in test_results.__dict__.items()})
+            logger.info(data)
 
         # Every 20_000 iterations, save the model checkpoints
         # NOTE: was 50_000 in the original code
@@ -279,6 +288,6 @@ def train_viscoin(
                 # this evaluates faithfullness
                 best_concept_proba.append(results.best_concept_probas_best[1])
 
-            logger.info(
+            print(
                 f"Faithfullness stats (probability of best concept after reconstruction): mean = {np.mean(best_concept_proba)} --- std = {np.std(best_concept_proba)}"
             )

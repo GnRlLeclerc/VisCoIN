@@ -1,18 +1,48 @@
 """
 Command line helpers for the viscoin cli.
 Notably, flag wrappers.
+
+NOTE: training parameter flags are optional, so that different models may specify
+different defaults when they are not present.
 """
 
 import click
+
+###########################################################
+#         OPTIONAL TRAINING / TESTING PARAMETERS          #
+###########################################################
 
 
 def batch_size(func):
     return click.option(
         "--batch-size",
-        default=32,
+        required=False,
         help="The batch size to use for training/testing",
         type=int,
     )(func)
+
+
+def epochs(func):
+    return click.option(
+        "--epochs",
+        help="The amount of epochs to train the model for",
+        required=False,
+        type=int,
+    )(func)
+
+
+def learning_rate(func):
+    return click.option(
+        "--learning-rate",
+        help="The optimizer learning rate",
+        required=False,
+        type=float,
+    )(func)
+
+
+###########################################################
+#           REQUIRED / DEFAULT MODEL PARAMETERS           #
+###########################################################
 
 
 def device(func):
@@ -24,13 +54,8 @@ def device(func):
     )(func)
 
 
-def epochs(func):
-    return click.option(
-        "--epochs",
-        help="The amount of epochs to train the model for",
-        default=30,
-        type=int,
-    )(func)
+def checkpoints(func):
+    return click.option("--checkpoints", help="The path to load the checkpoints", type=str)(func)
 
 
 def output_weights(func):
@@ -42,38 +67,33 @@ def output_weights(func):
     )(func)
 
 
+###########################################################
+#                       MODEL PATHS                       #
+###########################################################
+
+
 def viscoin_pickle_path(func):
     return click.option(
         "--viscoin-pickle-path",
         help="The path to the viscoin pickle file",
-        default="./checkpoints/cub/viscoin-cub.pkl",
-        required=True,
+        required=False,
         type=str,
     )(func)
 
 
-def concept2clip_path(func):
+def concept2clip_pickle_path(func):
     return click.option(
         "--clip-adapter-path",
-        help="The path to the clip adapter model",
-        required=True,
+        help="The path to the concept2clip pickle file",
+        required=False,
         type=str,
     )(func)
 
 
-def vocab_path(func):
+def dataset(func):
     return click.option(
-        "--vocab-path",
-        help="The path to the vocab file",
-        required=True,
-        type=str,
-    )(func)
-
-
-def dataset_type(func):
-    return click.option(
-        "--dataset-type",
-        help="The type of dataset to use for training/testing",
+        "--dataset",
+        help="The dataset to use",
         default="cub",
         type=click.Choice(["cub", "funnybirds"]),
     )(func)

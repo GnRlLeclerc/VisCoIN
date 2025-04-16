@@ -9,7 +9,7 @@ from torch import Tensor, nn
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
-from viscoin.datasets.utils import get_datasets
+from viscoin.datasets.utils import get_dataloaders
 
 
 def _img_cache(mode: Literal["train", "test"], dataset: str, model: str) -> str:
@@ -70,19 +70,16 @@ class CLIP(nn.Module):
         except FileNotFoundError:
             pass
 
-        train, test = get_datasets(dataset, transform=self.preprocess)
-
         self.eval()
 
         batch_size = 32
-        train_loader = DataLoader(train, batch_size)
-        test_loader = DataLoader(test, batch_size)
+        train, test = get_dataloaders(dataset, batch_size, self.preprocess)
 
         train_embeddings = torch.zeros((len(train_loader.dataset), self.embedding_size))  # type: ignore
         test_embeddings = torch.zeros((len(test_loader.dataset), self.embedding_size))  # type: ignore
 
         for i, (batch, _) in enumerate(
-            tqdm(train_loader, desc=f"Computing CLIP embeddings for {dataset} - train")
+            tqdm(train, desc=f"Computing CLIP embeddings for {dataset} - train")
         ):
             batch = batch.to(self.device)
             with torch.no_grad():
@@ -91,7 +88,7 @@ class CLIP(nn.Module):
                 )
 
         for i, (batch, _) in enumerate(
-            tqdm(test_loader, desc=f"Computing CLIP embeddings for {dataset} - test")
+            tqdm(test, desc=f"Computing CLIP embeddings for {dataset} - test")
         ):
             batch = batch.to(self.device)
             with torch.no_grad():

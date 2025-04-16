@@ -11,7 +11,7 @@ from typing import Literal
 
 import kagglehub
 import requests
-from torch.utils.data import Dataset
+from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import (
     Compose as ComposeV1,  # for the CLIP model that uses legacy compose
 )
@@ -23,6 +23,22 @@ from viscoin.datasets.transforms import RESNET_TEST_TRANSFORM, RESNET_TRAIN_TRAN
 Compose = ComposeV1 | ComposeV2
 
 DatasetType = Literal["cub", "funnybirds"]
+
+
+DATASET_CLASSES = {
+    "cub": 200,
+    "funnybirds": 50,
+}
+
+DEFAULT_CHECKPOINTS = {
+    dataset: {
+        "classifier": f"checkpoints/{dataset}/classifier-{dataset}.pkl",
+        "gan": f"checkpoints/{dataset}/gan-{dataset}.pkl",
+        "gan_adapted": f"checkpoints/{dataset}/gan-adapted-{dataset}.pkl",
+        "viscoin": f"checkpoints/{dataset}/viscoin-{dataset}.pkl",
+    }
+    for dataset in DATASET_CLASSES.keys()
+}
 
 
 def download(url: str):
@@ -131,3 +147,31 @@ def get_datasets(
             raise ValueError(f"Unknown dataset: {name}")
 
     return train, test
+
+
+def get_dataloaders(
+    name: DatasetType, batch_size: int, transform: Literal["train", "test"] | Compose | None = None
+) -> tuple[DataLoader, DataLoader]:
+    """Load the train and test datasets for the given dataset name into dataloaders.
+
+    Both dataloaders will be shuffled (just in case of batch-dependent testing).
+
+    Reminder:
+    - train transforms usually apply random cropping, resizing, etc
+    - test transforms usually apply resizing and normalization
+
+    When doing fine-tuning of additional models (such as concept2clip), use "test" for both datasets
+    in order to match the CLIP model's test transforms.
+
+    Args:
+        name: dataset variant
+        batch_size: batch size for the dataloaders
+        transform: the transform to apply to all images
+            - None: applies the default train/test transform to the train/test datasets
+            - "train": applies the train transform to both datasets
+            - "test": applies the test transform to both datasets
+            - Compose: applies the given transform to both datasets
+    """
+    train, test = get_datasets(name, transform)
+
+    return DataLoader(train, batch_size, shuffle=True), DataLoader(test, batch_size, shuffle=True)

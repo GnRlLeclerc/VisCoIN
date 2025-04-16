@@ -104,14 +104,14 @@ Train the classifier:
 
 ```bash
 # For CUB
-python main.py train classifier --epochs 30 --learning-rate 0.0001  --dataset-path datasets/CUB_200_2011
+python main.py train classifier --epochs 30 --learning-rate 0.0001  --dataset cub
 ```
 
 Train the VisCoIN ensemble:
 
 ```bash
 # For CUB
-python main.py train viscoin --batch-size 8 --dataset-path datasets/CUB_200_2011
+python main.py train viscoin --batch-size 8 --dataset cub
 ```
 
 ### Test
@@ -119,7 +119,7 @@ python main.py train viscoin --batch-size 8 --dataset-path datasets/CUB_200_2011
 Test the classifier:
 
 ```bash
-python main.py test classifier --dataset-path datasets/CUB_200_2011 --checkpoints checkpoints/cub/classifier-cub.pt
+python main.py test classifier --dataset cub --checkpoints checkpoints/cub/classifier-cub.pt
 ```
 
 ### Logs
@@ -147,7 +147,7 @@ python main.py to-pickle --checkpoints viscoin4-5.pth --output viscoin-cub.pkl
 Analyse VisCoIN concepts:
 
 ```bash
-python main.py concepts --dataset-path datasets/CUB_200_2011 --viscoin-pickle-path viscoin-cub.pkl
+python main.py concepts --dataset cub --viscoin-pickle-path viscoin-cub.pkl
 ```
 
 Note that the results are cached. Use `--force` to recompute them.
@@ -163,13 +163,13 @@ Note that the results are cached. Use `--force` to recompute them.
 Amplifying concepts whose activation is over a threshold:
 
 ```bash
-python main.py amplify --dataset-path datasets/CUB_200_2011 --viscoin-pickle-path checkpoints/cub/viscoin-cub.pkl --concept-threshold 0.2
+python main.py amplify --dataset cub --viscoin-pickle-path checkpoints/cub/viscoin-cub.pkl --concept-threshold 0.2
 ```
 
 Amplifying the top k concepts for each image:
 
 ```bash
-python main.py amplify --dataset-path datasets/CUB_200_2011 --viscoin-pickle-path checkpoints/cub/viscoin-cub.pkl --concept-top-k 5
+python main.py amplify --dataset cub --viscoin-pickle-path checkpoints/cub/viscoin-cub.pkl --concept-top-k 5
 ```
 
 ![Concept Amplification](./images/concept_amplification.png)
@@ -182,7 +182,7 @@ python main.py amplify --dataset-path datasets/CUB_200_2011 --viscoin-pickle-pat
 Visualize concept heatmaps:
 
 ```bash
-python main.py concept-heatmaps --dataset-path datasets/CUB_200_2011 --viscoin-pickle-path viscoin-cub.pkl
+python main.py concept-heatmaps --dataset cub --viscoin-pickle-path viscoin-cub.pkl
 ```
 
 ![Concept Heatmaps](./images/concept_heatmaps.png)
