@@ -28,7 +28,7 @@ class Concept2CLIP(nn.Module):
             nn.Linear(hidden_dim, clip_dim),
         )
 
-    def forward(self, x: Tensor):
+    def forward(self, x: Tensor) -> Tensor:
         """Forward pass of the model.
 
         Args:

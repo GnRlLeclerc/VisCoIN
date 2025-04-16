@@ -13,7 +13,6 @@ import click
 
 from viscoin.cli.amplify import amplify
 from viscoin.cli.concept_heatmaps import concept_heatmaps
-from viscoin.cli.concept_labels import clip_concept_labels, evalutate_concept_captions
 from viscoin.cli.concepts import concepts
 from viscoin.cli.logs import logs
 from viscoin.cli.test import test
@@ -38,10 +37,6 @@ def main():
 main.add_command(train)
 main.add_command(test)
 main.add_command(to_pickle)
-
-main.add_command(clip_concept_labels)
-main.add_command(evalutate_concept_captions)
-
 main.add_command(amplify)
 main.add_command(concepts)
 main.add_command(concept_heatmaps)
