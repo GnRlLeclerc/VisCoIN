@@ -8,7 +8,7 @@ from viscoin.models.utils import load_viscoin_pickle
 from viscoin.testing.viscoin import (
     Selection,
     amplify_concepts,
-    amplify_single_concepts,
+    amplify_specific_concepts,
     plot_amplified_images_batch,
 )
 
@@ -28,7 +28,7 @@ from viscoin.testing.viscoin import (
 )
 @click.option(
     "--concept-indices",
-    help="The indices of the concepts to amplify : eg. 1,2,3,4,5",
+    help="The indices of the concepts to amplify simultaneously : eg. 1,2,3,4,5",
     type=str,
 )
 @click.option(
@@ -98,13 +98,13 @@ def amplify(
             )
             amplified.append(results.amplified_images)
     else:
-        for concept_id, image in zip(concept_selection["indices"], originals):
-            results = amplify_single_concepts(
+        for image in originals:
+            results = amplify_specific_concepts(
                 image,
                 gan,
                 classifier,
                 concept_extractor,
-                concept_id,
+                concept_selection["indices"],
                 multipliers,
             )
             amplified.append(results)
