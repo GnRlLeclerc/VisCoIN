@@ -4,7 +4,6 @@ from torch import Tensor
 
 from viscoin.cli.utils import device, viscoin_pickle_path
 from viscoin.datasets.cub import CUB_200_2011
-from viscoin.datasets.utils import DEFAULT_CHECKPOINTS
 from viscoin.models.utils import load_viscoin_pickle
 from viscoin.testing.viscoin import (
     Selection,
@@ -41,7 +40,7 @@ def amplify(
     concept_indices: str | None,
     image_indices: str | None,
     device: str,
-    viscoin_pickle_path: str = DEFAULT_CHECKPOINTS["cub"]["viscoin"],
+    viscoin_pickle_path: str,
 ):
     """Amplify the concepts of random images from a dataset (showcase)"""
     n_samples = 5

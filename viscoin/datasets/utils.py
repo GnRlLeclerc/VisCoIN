@@ -40,6 +40,8 @@ DEFAULT_CHECKPOINTS = {
     for dataset in DATASET_CLASSES.keys()
 }
 
+DEFAULT_VISCOIN = DEFAULT_CHECKPOINTS["cub"]["viscoin"]
+
 
 def download(url: str):
     """Download a ZIP file from a URL and extract it to the specified destination."""

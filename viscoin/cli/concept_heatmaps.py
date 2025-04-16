@@ -7,7 +7,6 @@ import torch.nn.functional as F
 
 from viscoin.cli.utils import device, viscoin_pickle_path
 from viscoin.datasets.cub import CUB_200_2011
-from viscoin.datasets.utils import DEFAULT_CHECKPOINTS
 from viscoin.models.utils import load_viscoin_pickle
 from viscoin.utils.gradcam import GradCAM
 from viscoin.utils.images import from_torch, heatmap_to_img, overlay
@@ -16,7 +15,7 @@ from viscoin.utils.images import from_torch, heatmap_to_img, overlay
 @click.command()
 @viscoin_pickle_path
 @device
-def concept_heatmaps(device: str, viscoin_pickle_path: str = DEFAULT_CHECKPOINTS["cub"]["viscoin"]):
+def concept_heatmaps(device: str, viscoin_pickle_path: str):
     """Generate heatmaps for random images of the dataset, for the 5 convolutional layers of the concept extractor,
     using GradCAM."""
 

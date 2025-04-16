@@ -6,7 +6,6 @@ from torch.utils.data import DataLoader
 
 from viscoin.cli.utils import batch_size, device, viscoin_pickle_path
 from viscoin.datasets.cub import CUB_200_2011
-from viscoin.datasets.utils import DEFAULT_CHECKPOINTS
 from viscoin.models.utils import load_viscoin_pickle
 from viscoin.testing.concepts import test_concepts
 
@@ -23,8 +22,8 @@ from viscoin.testing.concepts import test_concepts
 def concepts(
     force: bool,
     device: str,
+    viscoin_pickle_path: str,
     batch_size: int = 32,
-    viscoin_pickle_path: str = DEFAULT_CHECKPOINTS["cub"]["viscoin"],
 ):
     """Analyse the distribution of concepts across the test dataset, and how well they separate classes."""
 

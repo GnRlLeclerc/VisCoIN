@@ -176,13 +176,24 @@ class TopKSelection(TypedDict):
     k: int  # Default: 3
 
 
+class IndicesSelection(TypedDict):
+    """Select the concepts by their indices"""
+
+    method: Literal["indices"]
+    indices: list[int]  # Default: [0, 1, 2]
+
+
+Selection = ThresholdSelection | TopKSelection | IndicesSelection
+
+
 def amplify_concepts(
     image: Tensor,
     classifier: Classifier,
     concept_extractor: ConceptExtractor,
     explainer: Explainer,
     generator: GeneratorAdapted,
-    concept_selection: ThresholdSelection | TopKSelection,
+    concept_selection: Selection,
+    multipliers: list[float],
     device: str,
 ) -> AmplifiedConceptsResults:
     """
@@ -195,8 +206,8 @@ def amplify_concepts(
         concept_extractor: The concept extractor model.
         explainer: The explainer model.
         generator: The VisCoIN GAN model.
+        multipliers: The multipliers to use for amplification.
         device: The device to use.
-        threshold: [-1, 1] - The threshold to select the best concepts.
 
     Returns: AmplifiedConceptsResults, a dataclass containing the results.
     """
@@ -206,7 +217,6 @@ def amplify_concepts(
     explainer = explainer.eval()
     generator = generator.eval()
 
-    multipliers = [0.0, 1.0, 2.0, 4.0]
     results = AmplifiedConceptsResults(
         image=image.clone(),
         default_probas=torch.tensor([]),

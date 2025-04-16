@@ -163,13 +163,13 @@ Note that the results are cached. Use `--force` to recompute them.
 Amplifying concepts whose activation is over a threshold:
 
 ```bash
-python main.py amplify --dataset cub --viscoin-pickle-path checkpoints/cub/viscoin-cub.pkl --concept-threshold 0.2
+python main.py amplify --viscoin-pickle-path checkpoints/cub/viscoin-cub.pkl --concept-threshold 0.2
 ```
 
 Amplifying the top k concepts for each image:
 
 ```bash
-python main.py amplify --dataset cub --viscoin-pickle-path checkpoints/cub/viscoin-cub.pkl --concept-top-k 5
+python main.py amplify --viscoin-pickle-path checkpoints/cub/viscoin-cub.pkl --concept-top-k 5
 ```
 
 ![Concept Amplification](./images/concept_amplification.png)

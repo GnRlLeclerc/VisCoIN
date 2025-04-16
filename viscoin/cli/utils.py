@@ -8,6 +8,8 @@ different defaults when they are not present.
 
 import click
 
+from viscoin.datasets.utils import DEFAULT_VISCOIN
+
 ###########################################################
 #         OPTIONAL TRAINING / TESTING PARAMETERS          #
 ###########################################################
@@ -76,6 +78,7 @@ def viscoin_pickle_path(func):
     return click.option(
         "--viscoin-pickle-path",
         help="The path to the viscoin pickle file",
+        default=DEFAULT_VISCOIN,
         required=False,
         type=str,
     )(func)
