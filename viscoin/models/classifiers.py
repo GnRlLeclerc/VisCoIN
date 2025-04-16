@@ -3,8 +3,6 @@ The classifiers are ResNet-18 or ResNet-50 models with a custom fully connected 
 with a custom amount of output classes.
 """
 
-from typing import Literal
-
 import torch
 from torch import Tensor, nn
 from transformers import ResNetConfig, ResNetModel

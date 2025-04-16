@@ -282,6 +282,7 @@ def train_viscoin(
                     explainer,
                     viscoin_gan,
                     {"method": "threshold", "threshold": 0.2},
+                    [0.0, 1.0, 2.0, 4.0],
                     device,
                 )
                 # The element of index 1 corresponds to the rebuild image for x1 intensity
