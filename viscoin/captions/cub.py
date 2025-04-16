@@ -103,7 +103,7 @@ def _add_sizes(caption: str, part: str) -> list[str]:
     """Add sizes to the caption if the part is in the whitelist."""
 
     if part in size_whitelist:
-        return [f"{caption} {size}" for size in sizes]
+        return [f"{size} {caption}" for size in sizes]
     else:
         return [caption]
 
@@ -141,7 +141,7 @@ def load(prefix: Literal["a bird with"] | None = None) -> list[str]:
 
     for i, caption in enumerate(captions):
         caption = caption.strip()
-        captions[i] = f"{prefix} {caption.strip()}" if prefix else caption
+        captions[i] = f"{prefix} {caption}" if prefix else caption
 
     return captions
 
