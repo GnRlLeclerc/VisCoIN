@@ -3,7 +3,7 @@ import clip
 import numpy as np
 import torch
 
-from viscoin.cli.utils import concept2clip_path, device, viscoin_pickle_path, vocab_path
+from viscoin.cli.utils import concept2clip_pickle_path, device, viscoin_pickle_path
 from viscoin.datasets.cub import CUB_200_2011
 from viscoin.models.utils import load_viscoin_pickle
 from viscoin.testing.concept2clip import get_concept_labels_vocab
@@ -11,8 +11,13 @@ from viscoin.testing.concept_label_metric import evaluate_concept_labels
 
 
 @click.command()
-@concept2clip_path
-@vocab_path
+@concept2clip_pickle_path
+@click.option(
+    "--vocab-path",
+    help="The path to the vocab file",
+    required=True,
+    type=str,
+)
 @viscoin_pickle_path
 @click.option(
     "--n-concepts",

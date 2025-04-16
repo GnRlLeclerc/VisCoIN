@@ -302,7 +302,7 @@ def amplify_single_concepts(
     concept_extractor: ConceptExtractor,
     concept_index: int,
     multipliers: list[float],
-):
+) -> list[Tensor]:
 
     _, classifier_latents = classifier.forward(image.unsqueeze(0))
     concept_embeddings, extra_info = concept_extractor.forward(classifier_latents[-3:])
