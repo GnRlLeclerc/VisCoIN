@@ -5,7 +5,7 @@ with a custom amount of output classes.
 
 import torch
 from torch import Tensor, nn
-from transformers import ResNetConfig, ResNetModel
+from transformers import ResNetConfig, ResNetModel  # type: ignore
 
 # Hidden state tuple for ResNet models
 HiddenStates = tuple[Tensor, Tensor, Tensor, Tensor, Tensor]
