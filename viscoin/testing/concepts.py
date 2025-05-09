@@ -49,18 +49,18 @@ class ConceptTestResults:
         print(f"Explainer accuracy: {self.explainer_accuracy*100:2f}%")
 
     def plot_concept_activation_per_concept(self):
-        plt.plot(self.concept_activation_per_concept)
+        plt.hist(self.concept_activation_per_concept, bins=30, edgecolor="black")
         plt.title("Concept activation per concept over the test dataset")
-        plt.xlabel("Concept")
-        plt.ylabel("Activation (% of total activation)")
+        plt.xlabel("Activation (% of total activation)")
+        plt.ylabel("Amount of concepts")
         plt.grid()
         plt.show()
 
     def plot_concept_activation_per_image(self):
-        plt.plot(self.concept_activation_per_image)
+        plt.hist(self.concept_activation_per_image, bins=30, edgecolor="black")
         plt.title("Concept activation per image over the test dataset")
-        plt.xlabel("Concept")
-        plt.ylabel("Activation (% of total activation)")
+        plt.xlabel("Activation (% of total activation)")
+        plt.ylabel("Amount of concepts")
         plt.grid()
         plt.show()
 

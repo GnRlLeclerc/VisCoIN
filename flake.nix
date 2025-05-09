@@ -55,12 +55,12 @@
 
               kagglehub = final.python312.pkgs.buildPythonPackage rec {
                 pname = "kagglehub";
-                version = "v0.3.11";
+                version = "v0.3.12";
                 src = final.fetchFromGitHub {
                   owner = "Kaggle";
                   repo = pname;
                   rev = version;
-                  sha256 = "sha256-o/ONJbYQM1PK40w2L6JLD3uIpFnw5pw7Gr7Ee5xjbVQ=";
+                  sha256 = "sha256-6I5SX+PSiTsMKFdKGaRB8pB6869NUzObsBxYFBAYPrA=";
                 };
 
                 # Add hatch build system
@@ -143,6 +143,7 @@
                 lpips
                 clip
                 ipykernel
+                scikit-learn
 
                 # GTK backend for matplotlib
                 pygobject3

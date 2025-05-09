@@ -21,6 +21,7 @@ dependencies:
   - lpips
   - openai-clip
   - opencv
+  - scikit-learn
 
   # Utilities
   - click

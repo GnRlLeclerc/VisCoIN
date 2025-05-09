@@ -12,6 +12,7 @@ Will be subject to many changes as the project evolves.
 import click
 
 from viscoin.cli.amplify import amplify
+from viscoin.cli.amplify_pca import amplify_pca
 from viscoin.cli.concept_heatmaps import concept_heatmaps
 from viscoin.cli.concepts import concepts
 from viscoin.cli.logs import logs
@@ -41,6 +42,7 @@ main.add_command(amplify)
 main.add_command(concepts)
 main.add_command(concept_heatmaps)
 main.add_command(logs)
+main.add_command(amplify_pca)
 
 
 if __name__ == "__main__":

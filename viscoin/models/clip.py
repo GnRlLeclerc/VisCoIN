@@ -31,15 +31,14 @@ class CLIP(nn.Module):
     The difference is usually of the order of 1e-3.
     """
 
-    def __init__(self, device: str = "cuda"):
+    def __init__(self):
         super().__init__()
 
         self.kind = "ViT-B/32"
-        model, preprocess = clip.load(self.kind, device=device)
+        model, preprocess = clip.load(self.kind, device="cpu")
         self.model = model
         self.preprocess = preprocess
         self.embedding_size = model.visual.output_dim
-        self.device = device
 
     def encode_image(self, x: Tensor) -> Tensor:
         return self.model.encode_image(x)
@@ -48,7 +47,7 @@ class CLIP(nn.Module):
         return self.model.encode_text(x)
 
     def compute_image_embeddings(
-        self, dataset: Literal["cub", "funnybirds"]
+        self, dataset: Literal["cub", "funnybirds"], device: str = "cuda"
     ) -> tuple[Tensor, Tensor]:
         """Compute CLIP embeddings on the given datasets.
         We define this helper because CLIP needs its own transforms,
@@ -71,6 +70,7 @@ class CLIP(nn.Module):
             pass
 
         self.eval()
+        self.to(device)
 
         batch_size = 32
         train, test = get_dataloaders(dataset, batch_size, self.preprocess)
@@ -81,7 +81,7 @@ class CLIP(nn.Module):
         for i, (batch, _) in enumerate(
             tqdm(train, desc=f"Computing CLIP embeddings for {dataset} - train")
         ):
-            batch = batch.to(self.device)
+            batch = batch.to(device)
             with torch.no_grad():
                 train_embeddings[i * batch_size : (i + 1) * batch_size] = (
                     self.encode_image(batch).detach().cpu()
@@ -90,7 +90,7 @@ class CLIP(nn.Module):
         for i, (batch, _) in enumerate(
             tqdm(test, desc=f"Computing CLIP embeddings for {dataset} - test")
         ):
-            batch = batch.to(self.device)
+            batch = batch.to(device)
             with torch.no_grad():
                 test_embeddings[i * batch_size : (i + 1) * batch_size] = (
                     self.encode_image(batch).detach().cpu()
@@ -101,10 +101,17 @@ class CLIP(nn.Module):
         torch.save(train_embeddings, _img_cache("train", dataset, self.kind))
         torch.save(test_embeddings, _img_cache("test", dataset, self.kind))
 
+        # Back to CPU to free up GPU memory
+        self.cpu()
+
         return train_embeddings, test_embeddings
 
     def compute_text_embeddings(
-        self, captions: list[str], dataset: Literal["cub", "funnybirds"], cache_key: str
+        self,
+        captions: list[str],
+        dataset: Literal["cub", "funnybirds"],
+        cache_key: str,
+        device: str = "cuda",
     ) -> Tensor:
         """Compute CLIP embeddings of the given captions / sentences.
 
@@ -126,6 +133,9 @@ class CLIP(nn.Module):
         except FileNotFoundError:
             pass
 
+        self.to(device)
+        self.eval()
+
         batch_size = 32
 
         text = clip.tokenize(captions)
@@ -134,8 +144,6 @@ class CLIP(nn.Module):
 
         embeddings = torch.zeros((len(captions), self.embedding_size))
 
-        self.model.eval()
-
         for i, batch in enumerate(
             tqdm(
                 dataloader,
@@ -143,7 +151,7 @@ class CLIP(nn.Module):
             )
         ):
             with torch.no_grad():
-                batch = batch[0].to(self.device)
+                batch = batch[0].to(device)
                 embeddings[i * batch_size : (i + 1) * batch_size] = (
                     self.encode_text(batch).detach().cpu()
                 )
@@ -151,5 +159,8 @@ class CLIP(nn.Module):
         # Save the embeddings to cache
         os.makedirs("checkpoints/clip", exist_ok=True)
         torch.save(embeddings, _txt_cache(cache_key, dataset, self.kind))
+
+        # Back to CPU to free up GPU memory
+        self.cpu()
 
         return embeddings

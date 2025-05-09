@@ -1,19 +1,16 @@
 import json
-import os
 from dataclasses import dataclass
 from typing import Literal
 
 import torch
 import torch.nn.functional as F
-from torch import Tensor, optim
+from torch import nn, optim
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
-from viscoin.datasets.utils import DatasetType, get_dataloaders
-from viscoin.models.classifiers import Classifier
+from viscoin.datasets.utils import DatasetType
 from viscoin.models.clip import CLIP
-from viscoin.models.concept2clip import Concept2CLIP
-from viscoin.models.concept_extractors import ConceptExtractor
+from viscoin.models.utils import VisCoINModels
 from viscoin.testing.concept2clip import test_concept2clip
 from viscoin.utils.dataclasses import IgnoreNone
 from viscoin.utils.logging import get_logger
@@ -31,10 +28,10 @@ class Concept2ClipTrainingParams(IgnoreNone):
 
 
 def train_concept2clip(
-    classifier: Classifier,
-    concept_extractor: ConceptExtractor,
-    concept2clip: Concept2CLIP,
+    models: VisCoINModels,
+    concept2clip: nn.Module,
     clip_model: CLIP,
+    latent_type: Literal["viscoin", "gan"],
     dataset: DatasetType,
     device: str,
     params: Concept2ClipTrainingParams,
@@ -59,15 +56,16 @@ def train_concept2clip(
     #                                   PRECOMPUTE CONCEPT SPACES                                 #
     ###############################################################################################
 
-    train_concept_spaces, test_concept_spaces = _compute_concept_spaces(
-        classifier,
-        concept_extractor,
-        dataset,
-        device,
-        batch_size,
-    )
+    train_concept_spaces, test_concept_spaces = None, None
 
-    del classifier, concept_extractor  # free GPU memory
+    match latent_type:
+        case "viscoin":
+            train_concept_spaces, test_concept_spaces = models.compute_concept_space(
+                dataset, device, batch_size
+            )
+        case "gan":
+            train_concept_spaces, test_concept_spaces = models.compute_w_space(dataset, device)
+
     torch.cuda.empty_cache()
 
     ###############################################################################################
@@ -161,68 +159,3 @@ def train_concept2clip(
     # Load the best model
     print(f"Best test loss: {best_loss:.4f}")
     concept2clip.load_state_dict(best_model)
-
-
-def _cache(mode: Literal["train", "test"], dataset: str) -> str:
-    return f"checkpoints/concepts/{dataset}_{mode}.pt"
-
-
-def _compute_concept_spaces(
-    classifier: Classifier,
-    concept_extractor: ConceptExtractor,
-    dataset: DatasetType,
-    device: str,
-    batch_size,
-) -> tuple[Tensor, Tensor]:
-    """Precompute the concept spaces for the whole training and testing image sets.
-
-    Args:
-        classifier: viscoin classifier
-        concept_extractor: viscoin concept extractor
-        dataset: name of the dataset (for cache path)
-        device: device to use for training
-
-    The results are cached under checkpoints/concepts/
-
-    Returns:
-        train_concept_spaces: concept spaces for the training set (on CPU)
-        test_concept_spaces: concept spaces for the testing set (on CPU)
-    """
-
-    try:
-        train_embeddings = torch.load(_cache("train", dataset), weights_only=True)
-        test_embeddings = torch.load(_cache("test", dataset), weights_only=True)
-        return train_embeddings, test_embeddings
-    except FileNotFoundError:
-        pass
-
-    # Use both datasets in test transform mode, no shuffling
-    train, test = get_dataloaders(dataset, batch_size, "test")
-
-    n_concepts = concept_extractor.n_concepts
-    len_train = len(train_loader.dataset)  # type: ignore
-    len_test = len(test_loader.dataset)  # type: ignore
-
-    train_concept_spaces = torch.zeros((len_train, n_concepts, 3, 3))  # type: ignore
-    test_concept_spaces = torch.zeros((len_test, n_concepts, 3, 3))  # type: ignore
-
-    classifier.eval()
-    concept_extractor.eval()
-
-    for i, (inputs, _) in enumerate(tqdm(train, desc="Precomputing training embeddings")):
-        inputs = inputs.to(device)
-        _, hidden = classifier.forward(inputs)
-        concept_space, _ = concept_extractor.forward(hidden[-3:])
-        train_concept_spaces[i * batch_size : (i + 1) * batch_size] = concept_space.detach().cpu()
-
-    for i, (inputs, _) in enumerate(tqdm(test, desc="Precomputing testing embeddings")):
-        inputs = inputs.to(device)
-        _, hidden = classifier.forward(inputs)
-        concept_space, _ = concept_extractor.forward(hidden[-3:])
-        test_concept_spaces[i * batch_size : (i + 1) * batch_size] = concept_space.detach().cpu()
-
-    os.makedirs("checkpoints/concepts", exist_ok=True)
-    torch.save(train_concept_spaces, _cache("train", dataset))
-    torch.save(test_concept_spaces, _cache("test", dataset))
-
-    return train_concept_spaces, test_concept_spaces

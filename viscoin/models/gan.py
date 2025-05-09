@@ -5,6 +5,7 @@ import os
 import sys
 
 import torch
+from torch import Tensor
 from torchvision import transforms
 
 
@@ -103,6 +104,17 @@ class GeneratorAdapted(torch.nn.Module):
             # print ("Called here")
         if return_latents:
             return img, ws
+        return img
+
+    def gen_from_w(
+        self,
+        w: Tensor,
+        **synthesis_kwargs,
+    ) -> Tensor:
+        """Generate images directly from w latents (useful for W+ space analysis)"""
+        img = self.synthesis(w, **synthesis_kwargs)
+        if self.low_res256:
+            img = self.resizer(self.cropper(img))
         return img
 
     @classmethod

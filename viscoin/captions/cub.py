@@ -50,16 +50,18 @@ sizes = [
     "small",
     "medium",
     "large",
-    "long",
-    "broad",
+    # NOTE: on 256x256, sizes too precise are not visible
+    # "long",
+    # "broad",
 ]
 
-patterns = [
-    "striped",
-    "solid",
-    "plain",
-    "spotted",
-]
+# NOTE: CLIP is not fine enough to distinguish between patterns
+# patterns = [
+#     "striped",
+#     "solid",
+#     "plain",
+#     "spotted",
+# ]
 
 beak_shapes = [
     "hooked",
@@ -115,33 +117,23 @@ def generate() -> list[str]:
 
     for part in parts:
         for color in colors:
-            for pattern in patterns:
-                if part in bonus:
-                    for shape in bonus[part]:
-                        captions.extend(_add_sizes(f"{pattern} {color} {shape} {part}", part))
-                else:
-                    captions.extend(_add_sizes(f"{pattern} {color} {part}", part))
+            if part in bonus:
+                for shape in bonus[part]:
+                    captions.extend(_add_sizes(f"{color} {shape} {part}", part))
+            else:
+                captions.extend(_add_sizes(f"{color} {part}", part))
 
     return captions
 
 
-def load(prefix: Literal["a bird with"] | None = None) -> list[str]:
-    """Load the generated captions from disk.
-
-    A prefix can be inserted to the captions:
-    - when analyzing concepts, use no prefix, e.g. "striped orange back"
-    - when analyzing whole images, use a prefix, e.g. "a bird with striped orange back"
-
-    Args:
-        prefix: The prefix to add to the captions. Defaults to None.
-    """
+def load() -> list[str]:
+    """Load the generated captions from disk."""
     filepath = os.path.join("viscoin", "captions", "cub.txt")
     with open(filepath, "r") as f:
         captions = f.readlines()
 
     for i, caption in enumerate(captions):
-        caption = caption.strip()
-        captions[i] = f"{prefix} {caption}" if prefix else caption
+        captions[i] = caption.strip()
 
     return captions
 
