@@ -1,7 +1,7 @@
 """Classifiers testing functions"""
 
 import torch
-from clip.model import nn
+from torch import nn
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from tqdm import tqdm
