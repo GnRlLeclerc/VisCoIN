@@ -21,7 +21,7 @@ class Explainer(nn.Module):
     A final linear layer is applied to produce class predictions.
     """
 
-    def __init__(self, n_concepts=256, n_classes=200, normalized=False):
+    def __init__(self, n_concepts=16, n_classes=200, normalized=False):
         """Initialize an explainer network.
 
         Args:

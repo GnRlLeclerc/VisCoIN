@@ -40,7 +40,7 @@ class ConceptExtractor(nn.Module):
 
     def __init__(
         self,
-        n_concepts=256,
+        n_concepts=16,
         latent_channels=512,
         input_channels1=512,
         input_channels2=1024,

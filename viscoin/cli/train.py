@@ -202,7 +202,7 @@ def _train_viscoin(
     classifier = torch.load(DEFAULT_CHECKPOINTS[dataset]["classifier"], weights_only=False)
 
     generator_gan = torch.load(DEFAULT_CHECKPOINTS[dataset]["gan"])
-    viscoin_gan = GeneratorAdapted.from_gan(generator_gan)
+    viscoin_gan = GeneratorAdapted.from_gan(generator_gan, z_dim=16)
 
     # Using the default parameters for training on CUB
     params = VisCoINTrainingParams(
