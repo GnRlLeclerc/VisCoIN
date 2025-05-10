@@ -82,10 +82,11 @@ class ConceptExtractor(nn.Module):
         self.conv5 = nn.Conv2d(3 * latent_channels, n_concepts, kernel_size=1, padding=0, stride=1)
 
         # ------------ Compute the second output x2 ------------ #
+        # Hardcoded to 256 the size of the helper space Phi'
         # (batch_size, 9 * n_concepts)
-        self.linear1 = nn.Linear(latent_channels * 3 * 9, 9 * n_concepts, bias=True)
+        self.linear1 = nn.Linear(latent_channels * 3 * 9, 9 * 256, bias=True)
         # (batch_size, 9 * n_concepts)
-        self.linear2 = nn.Linear(9 * n_concepts, 9 * n_concepts, bias=False)
+        self.linear2 = nn.Linear(9 * 256, 9 * 256, bias=False)
 
         # Define activation and pooling layers
         self.activ = nn.ReLU()

@@ -70,8 +70,9 @@ class GeneratorAdapted(torch.nn.Module):
         # self.mapping = MappingNetwork_v4(z_dim=z_dim, c_dim=c_dim, w_dim=w_dim, num_ws=self.num_ws, **mapping_kwargs)
         # self.mapping = MappingNetworkAdapted(z1_dim=z_dim, z2_dim=8*z_dim, w_dim=w_dim, num_ws=self.num_ws, **mapping_kwargs) # Used until analyze18 for uneven (UE) representation size models
         # self.mapping = MappingNetworkAdapted(z1_dim=9*z_dim, z2_dim=8*z_dim, w_dim=w_dim, num_ws=self.num_ws, **mapping_kwargs) # Used for analyze21, 25, 26
+        # NOTE: hardcoded 256 size for z2 dim, the Phi' helper space for rebuilding
         self.mapping = MappingNetworkAdapted(
-            z1_dim=9 * z_dim, z2_dim=9 * z_dim, w_dim=w_dim, num_ws=self.num_ws, **mapping_kwargs
+            z1_dim=9 * z_dim, z2_dim=9 * 256, w_dim=w_dim, num_ws=self.num_ws, **mapping_kwargs
         )
         if small_adjust:
             print("Small adjustment to size of extra representation for analyze21 CUB model")
