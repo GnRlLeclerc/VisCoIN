@@ -12,13 +12,11 @@ import os
 
 import tqdm
 
-from diffusers import StableDiffusionImg2ImgPipeline
+from diffusers import StableDiffusionImg2ImgPipeline, StableDiffusionPipeline
 
 from PIL import Image
-import matplotlib.pyplot as plt
-from torchvision import transforms, datasets
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "./../.."))
+# sys.path.append(os.path.join(os.path.dirname(__file__), "./../.."))
 
 from viscoin.models.unet import DiffusionUNetAdapted
 
@@ -46,27 +44,51 @@ class LatentEditorDiffusion(nn.Module):
         """
 
         super(LatentEditorDiffusion, self).__init__()
-        model_id = "stabilityai/sd-turbo"
+        # model_id = "stabilityai/sd-turbo"
+        # model_id = "ebrahim-k/Stable-Diffusion-1_5-FT-celeba_HQ_en"
+        model_id = "runwayml/stable-diffusion-v1-5"
+        # model_id = "alibaba-pai/pai-diffusion-food-large-zh"
 
-        self.pipe = StableDiffusionImg2ImgPipeline.from_pretrained(
+        self.pipe = StableDiffusionPipeline.from_pretrained(
             model_id, torch_dtype=torch.float16, variant="fp16"
         )
 
-        self.pipe.to(device)
+        # self.pipe = StableDiffusionImg2ImgPipeline.from_pretrained(model_id)
 
         self.scheduler = self.pipe.scheduler
-        self.vae = self.pipe.vae
-        self.unet = DiffusionUNetAdapted(self.pipe.unet)
+        self.vae = self.pipe.vae.to(device)
+        self.unet = DiffusionUNetAdapted(self.pipe.unet).to(device)
+        self.tokenizer = self.pipe.tokenizer
+        self.text_encoder = self.pipe.text_encoder.to(device)
 
         # Parameters for the diffusion pipeline
         self.strength = strength
         self.num_inference_steps = num_inference_steps
         self.dtype = torch.float16
+        # self.dtype = torch.float32
         self.batch_size = batch_size
         self.num_images_per_prompt = 1
         self.device = device
 
-        self.setup_timestep()
+        self.do_classifier_free_guidance = True
+
+        # self.encode_prompt("a photo of a person")
+
+        # self.setup_timestep()
+
+    def encode_prompt(self, prompt: str, clip_embeddings: torch.Tensor = None):
+
+        if clip_embeddings is None:
+            self.prompt_embeds, self.negative_prompt_embeds = self.pipe.encode_prompt(
+                prompt, self.device, self.num_images_per_prompt, True
+            )
+        else:
+            self.prompt_embeds, self.negative_prompt_embeds = self.pipe.encode_prompt(
+                "", self.device, self.num_images_per_prompt, True, prompt_embeds=clip_embeddings
+            )
+
+        if self.do_classifier_free_guidance:
+            self.prompt_embeds = torch.cat([self.negative_prompt_embeds, self.prompt_embeds])
 
     def retrieve_timesteps(
         self,
@@ -85,17 +107,24 @@ class LatentEditorDiffusion(nn.Module):
 
     def setup_timestep(self):
         """Setup the timesteps for the diffusion process."""
+
+        self.scheduler._step_index = None
+
         timesteps, num_inference_steps = self.retrieve_timesteps(
             self.scheduler, self.num_inference_steps, self.device
         )
 
-        self.timesteps, self.num_diffusion_steps = self.pipe.get_timesteps(
-            num_inference_steps,
-            self.strength,
-            self.device,
-        )
+        # self.timesteps, self.num_diffusion_steps = self.pipe.get_timesteps(
+        #     num_inference_steps,
+        #     self.strength,
+        #     self.device,
+        # )
 
-        self.latent_timestep = timesteps[:1].repeat(self.batch_size * self.num_images_per_prompt)
+        self.timesteps, self.num_diffusion_steps = timesteps, num_inference_steps
+
+        self.latent_timestep = self.timesteps[:1].repeat(
+            self.batch_size * self.num_images_per_prompt
+        )
 
     def preprocess_image(self, image: Image.Image | torch.Tensor) -> torch.Tensor:
         return (
@@ -105,6 +134,19 @@ class LatentEditorDiffusion(nn.Module):
     def postprocess_image(self, image: torch.Tensor) -> Image.Image:
         output_type = "pil"
         return self.pipe.image_processor.postprocess(image.detach(), output_type=output_type)
+
+    def encode_text(self, prompt: str) -> torch.Tensor:
+        """Encode a text prompt into the latent space using the text encoder."""
+        text_input = self.tokenizer(
+            [prompt],
+            padding="max_length",
+            max_length=self.tokenizer.model_max_length,
+            truncation=True,
+            return_tensors="pt",
+        )
+        with torch.no_grad():
+            text_encoding = self.text_encoder(text_input.input_ids.to(self.device))[0]
+        return text_encoding
 
     def encode_image(self, image: torch.Tensor) -> torch.Tensor:
         """Encode an image into the latent space using the VAE encoder."""
@@ -143,10 +185,7 @@ class LatentEditorDiffusion(nn.Module):
                 noise_pred = self.unet(
                     latent_model_input,
                     t,
-                    encoder_hidden_states=torch.randn(
-                        (self.batch_size, PROMPT_EMBED_SHAPE[0], PROMPT_EMBED_SHAPE[1]),
-                        dtype=self.dtype,
-                    ).to(self.device),
+                    encoder_hidden_states=self.prompt_embeds,
                 )[0]
 
             # compute the previous noisy sample x_t -> x_t-1
@@ -192,204 +231,3 @@ class LatentEditorDiffusion(nn.Module):
         self.pipe.maybe_free_model_hooks()
 
         return image
-
-    def find_principal_directions(
-        self, latent_tensor: torch.Tensor, num_directions: int = 10
-    ) -> torch.Tensor:
-        """
-        Finds the principal directions of the vae latent space using SVD.
-
-        Args:
-            latent_tensor (torch.Tensor): (N_images, 4, 64, 64)
-            num_directions (int, optional): defaults to 10.
-
-        Returns:
-            torch.Tensor: A tensor of shape (num_directions, C, H, W).
-        """
-        N_images, C, H, W = latent_tensor.shape
-        original_shape = (C, H, W)
-        flattened_tensor = latent_tensor.view(N_images, -1)  # Shape: (N_images, C * H * W)
-
-        # Center the data
-        mean = torch.mean(flattened_tensor, dim=0)
-        centered_tensor = flattened_tensor - mean
-
-        # Perform Singular Value Decomposition (SVD)
-        U, S, V = torch.linalg.svd(centered_tensor.to(torch.float32))
-
-        principal_directions_list = []
-        for i in range(num_directions):
-            if i < V.shape[1]:
-                principal_direction_flattened = V[:, i]
-                principal_direction = principal_direction_flattened.view(original_shape)
-                principal_directions_list.append(principal_direction)
-            else:
-                break  # Stop if we run out of principal components
-
-        return torch.stack(principal_directions_list, dim=0)
-
-
-def get_dataset_principal_directions(
-    dataset_path: str = "./datasets/ffhq/",
-    save_path: str = "./../Experiments/images/diffusion_amp/principal_directions.pt",
-    num_directions: int = 10,
-) -> None:
-    """Saves the principal directions of the vae latent space of a dataset.
-
-    Args:
-        dataset_path (str, optional): Defaults to "./datasets/ffhq/".
-        save_path (str, optional): Where to save the directions (.pt)
-        num_directions (int, optional): Defaults to 10.
-    """
-
-    batch_size = 32
-
-    dataset = datasets.ImageFolder(root=dataset_path, transform=transforms.ToTensor())
-    dataset, _ = torch.utils.data.random_split(
-        dataset, [int(len(dataset) * 0.1), len(dataset) - int(len(dataset) * 0.1)]
-    )
-
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size)
-
-    editor = LatentEditorDiffusion(
-        device="cuda", num_inference_steps=3, strength=0.4, batch_size=batch_size
-    )
-
-    latents = []
-
-    with torch.no_grad():
-        for i, (img, _) in tqdm.tqdm(enumerate(dataloader), total=len(dataloader)):
-
-            if img.shape[0] != batch_size:
-                continue
-
-            preprocess = editor.preprocess_image(img)
-            encoded_image = editor.encode_image(preprocess)
-            latent = editor.compute_latent(encoded_image)
-
-            latent_model_input = latent
-            latent_model_input = editor.scheduler.scale_model_input(
-                latent_model_input, editor.latent_timestep
-            )
-            t = editor.timesteps[0]
-
-            # Unet downwards pass
-            initial_sample, down_block_res_samples, emb, encoder_hidden_states = (
-                editor.unet.downwards(
-                    latent_model_input,
-                    t,
-                    torch.zeros(
-                        (img.shape[0], PROMPT_EMBED_SHAPE[0], PROMPT_EMBED_SHAPE[1]),
-                        dtype=editor.dtype,
-                    ).to(editor.device),
-                )
-            )
-
-            # Unet mid pass
-            initial_sample = editor.unet.middle(
-                initial_sample,
-                emb,
-                encoder_hidden_states,
-            )
-
-            latents.append(initial_sample)
-
-    print(f"Latents shape: {latents[0].shape}")
-
-    latents = torch.cat(latents, dim=0)
-
-    with torch.no_grad():
-        directions = editor.find_principal_directions(latents, num_directions=num_directions)
-
-    print(f"Directions shape: {directions.shape}")
-
-    torch.save(directions, save_path)
-
-
-def amplify_diffusion(
-    image_path: str = "./datasets/ffhq/0/00095.png",
-    save_path: str = "./../Experiments/images/diffusion_amp",
-) -> None:
-    image = Image.open(image_path)
-
-    image.save(f"{save_path}/original.png")
-
-    editor = LatentEditorDiffusion(device="cuda", num_inference_steps=300, strength=0.3)
-
-    # Preprocess the image
-    image = editor.preprocess_image(image)
-
-    with torch.no_grad():
-
-        extra_step_kwargs = editor.pipe.prepare_extra_step_kwargs(None, eta=0.0)
-        random_direction = torch.randn((1, 1280, 8, 8), dtype=editor.dtype).to(editor.device) * 50
-
-        lambdas = [-7, -5, -3, 0, -1, 1, 3, 5, 7]
-        for i, lambda_ in enumerate(lambdas):
-            print(f"Lambda: {lambda_}")
-
-            # Encode the image
-            encoded_image = editor.encode_image(image)
-
-            # Compute the vae latent
-            latents = editor.compute_latent(encoded_image)
-
-            # Get the unet input
-
-            print(f"Number of steps: {len(editor.timesteps)}")
-
-            for i, t in enumerate(editor.timesteps):
-
-                latent_model_input = latents
-                latent_model_input = editor.scheduler.scale_model_input(latent_model_input, t)
-
-                # Unet downwards pass
-                initial_sample, down_block_res_samples, emb, encoder_hidden_states = (
-                    editor.unet.downwards(
-                        latent_model_input,
-                        t,
-                        torch.zeros(
-                            (editor.batch_size, PROMPT_EMBED_SHAPE[0], PROMPT_EMBED_SHAPE[1]),
-                            dtype=editor.dtype,
-                        ).to(editor.device),
-                    )
-                )
-
-                # Unet mid pass
-                initial_sample = editor.unet.middle(
-                    initial_sample,
-                    emb,
-                    encoder_hidden_states,
-                )
-
-                # Reset the scheduler and timestep
-                editor.scheduler._step_index = None
-
-                initial_sample = initial_sample + lambda_ * random_direction
-
-                # Unet upwards pass
-                noise_pred = editor.unet.upwards(
-                    initial_sample, down_block_res_samples, emb, encoder_hidden_states
-                )
-
-                # compute the previous noisy sample x_t -> x_t-1
-                latents = editor.scheduler.step(
-                    noise_pred, t, latents, **extra_step_kwargs, return_dict=False
-                )[0]
-
-            # Decode the latents to get the image
-            generated_image = editor.vae.decode(
-                latents / editor.vae.config.scaling_factor, return_dict=False, generator=None
-            )[0]
-
-            generated_image = editor.postprocess_image(generated_image)[0]
-
-            generated_image.save(f"{save_path}/amplified_{str(lambda_).replace("-", "neg")}.png")
-
-
-if __name__ == "__main__":
-    get_dataset_principal_directions(
-        dataset_path="./datasets/ffhq/",
-        save_path="./../Experiments/images/diffusion_amp/principal_directions.pt",
-        num_directions=10,
-    )

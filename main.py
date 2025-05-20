@@ -17,6 +17,12 @@ from viscoin.cli.concept_labels import clip_concept_labels, evalutate_concept_ca
 
 from viscoin.cli.visualization import amplify, amplify_single, concepts, concept_heatmaps, logs
 
+from viscoin.cli.diffusion import (
+    amplify_diffusion,
+    get_dataset_principal_directions,
+    image_to_prompt_diffusion,
+)
+
 # Imports Trogon if installed : Terminal User Interface for Click commands
 try:
     from trogon import tui
@@ -44,6 +50,10 @@ main.add_command(amplify_single)
 main.add_command(concepts)
 main.add_command(concept_heatmaps)
 main.add_command(logs)
+
+main.add_command(amplify_diffusion)
+main.add_command(get_dataset_principal_directions)
+main.add_command(image_to_prompt_diffusion)
 
 
 if __name__ == "__main__":

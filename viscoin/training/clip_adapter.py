@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 import torchvision.transforms
 from viscoin.models.classifiers import Classifier
-from viscoin.models.clip_adapter import ClipAdapter, ClipAdapterVAE
+from viscoin.models.concept2clip import Concept2CLIP
 from viscoin.models.concept_extractors import ConceptExtractor
 from viscoin.testing.clip_adapter import test_adapter
 from viscoin.training.losses import vae_reconstruction_loss, InfoNCE
@@ -39,7 +39,7 @@ class ClipAdapterVAETrainingParams:
 
 
 def train_clip_adapter(
-    clip_adapter: ClipAdapter | ClipAdapterVAE,
+    clip_adapter: Concept2CLIP,
     concept_extractor: ConceptExtractor,
     classifier: Classifier,
     viscoin_gan: GeneratorAdapted,

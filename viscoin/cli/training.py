@@ -23,7 +23,7 @@ from viscoin.models.classifiers import Classifier
 from viscoin.models.concept_extractors import ConceptExtractor
 from viscoin.models.explainers import Explainer
 from viscoin.models.gan import GeneratorAdapted
-from viscoin.models.clip_adapter import ClipAdapter, ClipAdapterVAE
+from viscoin.models.concept2clip import Concept2CLIP
 
 from viscoin.utils.logging import configure_score_logging
 from viscoin.utils.types import TestingResults, TrainingResults
@@ -61,14 +61,14 @@ DATASET_MODEL_PARAMS = {
 
 DATASET_DEFAULT_HPARAMS = {
     "cub": TrainingParameters(),
-    "funnybirds": TrainingParameters(
-        gamma=0.2,
-        iterations=25000,
-        test_iterations=1000,
-        save_iterations=5000,
-        amplify_iterations=5000,
-        delta=1.0,
-    ),
+    # "funnybirds": TrainingParameters(
+    #     gamma=0.2,
+    #     iterations=25000,
+    #     test_iterations=1000,
+    #     save_iterations=5000,
+    #     amplify_iterations=5000,
+    #     delta=1.0,
+    # ),
 }
 
 
@@ -163,7 +163,7 @@ def train(
                 output_weights,
             )
 
-        case "clip_adapter" | "clip_adapter_vae":
+        case "clip_adapter":
             setup_clip_adapter_training(
                 model_name,
                 device,
@@ -236,13 +236,8 @@ def setup_clip_adapter_training(
     clip_embedding_dim = clip_model.visual.output_dim
 
     if model_type == "clip_adapter":
-        clip_adapter = ClipAdapter(n_concepts * 9, clip_embedding_dim)
+        clip_adapter = Concept2CLIP(n_concepts * 9, clip_embedding_dim)
         params = ClipAdapterTrainingParams(epochs=epochs, learning_rate=learning_rate)
-    elif model_type == "clip_adapter_vae":
-        clip_adapter = ClipAdapterVAE(
-            n_concepts * 9, clip_embedding_dim, hidden_size=512, latent_size=128
-        )
-        params = ClipAdapterVAETrainingParams(epochs=epochs, learning_rate=learning_rate)
 
     clip_adapter = clip_adapter.to(device)
 

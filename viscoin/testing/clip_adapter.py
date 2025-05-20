@@ -8,14 +8,14 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from viscoin.models.classifiers import Classifier
-from viscoin.models.clip_adapter import ClipAdapter, ClipAdapterVAE
+from viscoin.models.concept2clip import Concept2CLIP
 from viscoin.models.concept_extractors import ConceptExtractor
 from viscoin.utils.metrics import cosine_matching
 from viscoin.datasets.cub import CUB_200_2011
 
 
 def test_adapter(
-    clip_adapter: ClipAdapter | ClipAdapterVAE,
+    clip_adapter: Concept2CLIP,
     classifier: Classifier,
     concept_extractor: ConceptExtractor,
     clip_model: CLIP,
@@ -72,7 +72,7 @@ def test_adapter(
 
 
 def get_concept_labels_vocab(
-    clip_adapter: ClipAdapter,
+    clip_adapter: Concept2CLIP,
     concept_extractor: ConceptExtractor,
     classifier: Classifier,
     clip_model: CLIP,

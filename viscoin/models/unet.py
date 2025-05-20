@@ -159,3 +159,19 @@ class DiffusionUNetAdapted(torch.nn.Module):
         sample = self.upwards(sample, down_block_res_samples, emb, encoder_hidden_states)
 
         return sample
+
+    def sample(self, num_samples: int, seed: int = None):
+        """
+        Samples random noise in the dimensions of the Unet
+        Taken from semantic-diffusion : https://github.com/renhaa/semantic-diffusion/blob/main/semanticdiffusion.py
+        """
+        if seed is None:
+            seed = torch.randint(int(1e6), (1,))
+
+        return torch.randn(
+            num_samples,
+            self.unet.in_channels,
+            self.unet.sample_size,
+            self.unet.sample_size,
+            generator=torch.manual_seed(seed),
+        ).to(self.unet.device)
