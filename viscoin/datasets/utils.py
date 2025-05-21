@@ -152,7 +152,10 @@ def get_datasets(
 
 
 def get_dataloaders(
-    name: DatasetType, batch_size: int, transform: Literal["train", "test"] | Compose | None = None
+    name: DatasetType,
+    batch_size: int,
+    transform: Literal["train", "test"] | Compose | None = None,
+    shuffle=True,
 ) -> tuple[DataLoader, DataLoader]:
     """Load the train and test datasets for the given dataset name into dataloaders.
 
@@ -176,4 +179,6 @@ def get_dataloaders(
     """
     train, test = get_datasets(name, transform)
 
-    return DataLoader(train, batch_size, shuffle=True), DataLoader(test, batch_size, shuffle=True)
+    return DataLoader(train, batch_size, shuffle=shuffle), DataLoader(
+        test, batch_size, shuffle=shuffle
+    )

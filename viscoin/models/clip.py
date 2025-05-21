@@ -73,10 +73,10 @@ class CLIP(nn.Module):
         self.eval()
 
         batch_size = 32
-        train, test = get_dataloaders(dataset, batch_size, self.preprocess)
+        train, test = get_dataloaders(dataset, batch_size, self.preprocess, shuffle=False)
 
-        train_embeddings = torch.zeros((len(train_loader.dataset), self.embedding_size))  # type: ignore
-        test_embeddings = torch.zeros((len(test_loader.dataset), self.embedding_size))  # type: ignore
+        train_embeddings = torch.zeros((len(train.dataset), self.embedding_size))  # type: ignore
+        test_embeddings = torch.zeros((len(test.dataset), self.embedding_size))  # type: ignore
 
         for i, (batch, _) in enumerate(
             tqdm(train, desc=f"Computing CLIP embeddings for {dataset} - train")
