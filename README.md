@@ -8,7 +8,17 @@
 
 <br>
 
-Implementation of Vision Concept-based Interpretable Networks. [See the paper](https://arxiv.org/abs/2407.01331v1).
+This repository contains code for the paper. ["Restyling Unsupervised Concept Based Interpretable Networks with Generative Models"](https://openreview.net/pdf?id=CexatBp6rx) by *Jayneel Parekh, Quentin Bouniot, Pavlo Mozharovskyi, Alasdair Newson, Florence d'Alché-Buc* (Published at ICLR 2025). The original implementation has been restructured in this repository by *Thibaut de Saivre and Hugo Aoyagi*. 
+
+<summary>Overview</summary>
+
+> Developing inherently interpretable models for prediction has gained prominence in recent years. A subclass of these models, wherein the interpretable network relies on learning high-level concepts, are valued because of closeness of concept representations to human communication. However, the visualization and understanding of the learnt unsupervised dictionary of concepts encounters major limitations, especially for large-scale images.
+
+> We propose here a novel method that relies on mapping the concept features to the latent space of a pretrained generative model. The use of a generative model enables high quality visualization, and lays out an intuitive and interactive procedure for better interpretation of the learnt concepts by imputing concept activations and visualizing generated modifications 
+
+<img src="./images/viscoin_sys.png" width="500"/>
+
+## Project Structure
 
 This project uses the [Black](https://github.com/psf/black) python formatter. Imports are sorted using [isort](https://pycqa.github.io/isort/).
 
@@ -20,8 +30,6 @@ See also (used in this repository):
 - [CLIP](https://github.com/openai/CLIP)
 
 ![Concept Amplification](./images/concept_amplification.png)
-
-## Project Structure
 
 Structure of the `viscoin` folder.
 
@@ -158,7 +166,7 @@ Note that the results are cached. Use `--force` to recompute them.
 ![Class Concept Importance](./images/class_concept_importance.png)
 ![Concept Class Importance](./images/concept_class_importance.png)
 
-### Amplifying concepts
+### Amplifying concepts activations for interpretation
 
 Amplifying concepts whose activation is over a threshold:
 
@@ -174,18 +182,6 @@ python main.py amplify --viscoin-pickle-path checkpoints/cub/viscoin-cub.pkl --c
 
 ![Concept Amplification](./images/concept_amplification.png)
 
-### Concept Heatmaps
-
-> ![WARNING]
-> WIP
-
-Visualize concept heatmaps:
-
-```bash
-python main.py concept-heatmaps --dataset cub --viscoin-pickle-path viscoin-cub.pkl
-```
-
-![Concept Heatmaps](./images/concept_heatmaps.png)
 
 ## Hyperparameters
 
