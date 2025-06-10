@@ -25,3 +25,9 @@ __pycache__/
 *.csv
 
 *.npy
+
+# Ignore all files starting with a dot (macos)
+.*
+!.gitignore
+!.gitmodules
+!.envrc
